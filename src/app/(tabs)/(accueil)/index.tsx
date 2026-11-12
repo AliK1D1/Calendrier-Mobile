@@ -1,39 +1,33 @@
-import { Link, router, useFocusEffect } from "expo-router";
-import { useCallback } from "react";
+import { Link, router } from "expo-router";
 
 import { PlanCard } from "@/components/plan-card";
 import { Body, Button, Card, ErrorText, Heading, Loading, Muted, Screen } from "@/components/ui";
-import { getMyProfile, getOnboardingStatus } from "@/lib/profile";
 import { loadPlans } from "@/lib/plans/queries";
 import { homePlans } from "@/lib/ux/homePlans";
 import { locale, t } from "@/services/i18n";
 import { useAuthed } from "@/services/session";
-import { useLoad } from "@/services/use-load";
+import { getHomeProfile } from "@/services/home";
+import { useLoad, useReloadOnFocus } from "@/services/use-load";
 import { usePalette } from "@/theme/use-palette";
 
 /** Accueil : bonjour, plans qui attendent ma réponse, mes prochains plans. */
 export default function Accueil() {
   const { supabase, userId } = useAuthed();
   const c = usePalette();
-  const { data, error, refreshing, refresh, reload } = useLoad(async () => {
-    const [profile, onboarded, plans] = await Promise.all([
-      getMyProfile(supabase, userId),
-      getOnboardingStatus(supabase),
+  const { data, error, refreshing, refresh, reload, age } = useLoad(async () => {
+    const [profile, plans] = await Promise.all([
+      getHomeProfile(supabase, userId),
       loadPlans(supabase, userId, new Date(), { locale }),
     ]);
     if (!plans.ok) throw new Error(plans.error);
-    return { profile, onboarded, plans: homePlans(plans.views) };
-  }, userId);
-  // Retour de l'accueil (bienvenue) ou d'un groupe : on relit les plans et l'état du profil.
-  useFocusEffect(
-    useCallback(() => {
-      void reload();
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []),
-  );
+    return { profile, onboarded: profile.onboarded, plans: homePlans(plans.views) };
+  }, userId, "accueil");
+  // Retour sur l'accueil (bienvenue, un groupe, un autre onglet) : on relit les plans et l'état
+  // du profil, sauf à la première ouverture et si on vient de les lire.
+  useReloadOnFocus(reload, age, 5_000);
 
   return (
-    <Screen title={t.home.hello(data?.profile?.display_name || undefined)} refreshing={refreshing} onRefresh={refresh}>
+    <Screen title={t.home.hello(data?.profile.displayName || undefined)} refreshing={refreshing} onRefresh={refresh}>
       <ErrorText>{error}</ErrorText>
       {!data && !error ? <Loading /> : null}
       {data?.onboarded === false ? (
