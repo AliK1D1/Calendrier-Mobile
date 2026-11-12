@@ -1,19 +1,26 @@
 import { Stack, useLocalSearchParams } from "expo-router";
+import { useState } from "react";
 import { Share } from "react-native";
+
+import { MeetupFinder } from "@/components/meetup-finder";
+import { ProposeSheet } from "@/components/propose-sheet";
 
 import { PlanCard } from "@/components/plan-card";
 import { Badge, Body, Button, Card, ErrorText, Heading, Loading, Muted, Row, Screen } from "@/components/ui";
 import { getGroupDetail } from "@/lib/groups/queries";
 import { inviteUrl } from "@/lib/groups/validation";
+import type { ProposalView } from "@/lib/meetups/search";
+import { defaultFreeSlot } from "@/lib/plans/validation";
 import { loadPlans } from "@/lib/plans/queries";
 import { locale, t } from "@/services/i18n";
 import { useAuthed } from "@/services/session";
 import { SITE_URL } from "@/services/site";
 import { useLoad } from "@/services/use-load";
+import { draftFromProposal, type ProposeDraft } from "@/features/propose";
 
 const tg = t.groups;
 
-/** Un groupe : inviter, plans à venir, membres. La recherche de moments arrive à l'étape suivante. */
+/** Un groupe : inviter, plans à venir, « Quand on peut se voir », proposer un moment, membres. */
 export default function Groupe() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { supabase, userId } = useAuthed();
@@ -28,6 +35,42 @@ export default function Groupe() {
 
   const group = data?.group;
   const link = group ? inviteUrl(SITE_URL, group.inviteCode) : null;
+  const [draft, setDraft] = useState<ProposeDraft | null>(null);
+  const [extraPlace, setExtraPlace] = useState<{ id: string; name: string } | null>(null);
+  const [flash, setFlash] = useState<string | null>(null);
+
+  const places = group ? group.favorites.map((f) => ({ id: f.id, name: f.name })) : [];
+  if (extraPlace && !places.some((p) => p.id === extraPlace.id)) places.unshift(extraPlace);
+
+  function proposeFromSlot(p: ProposalView, participantIds: string[]) {
+    if (!group) return;
+    setExtraPlace(p.placeId && p.placeName ? { id: p.placeId, name: p.placeName } : null);
+    setDraft(
+      draftFromProposal(p, {
+        groupId: group.id,
+        memberIds: group.members.map((m) => m.userId),
+        participantIds,
+        defaultTitle: t.plans.defaultTitle,
+        callTitle: tg.callTitle,
+        callLocation: tg.callLocation,
+      }),
+    );
+  }
+
+  function proposeFree() {
+    if (!group) return;
+    setExtraPlace(null);
+    setDraft({
+      groupId: group.id,
+      title: t.plans.defaultTitle,
+      ...defaultFreeSlot(new Date()),
+      durationMinutes: 120,
+      placeId: group.favorites[0]?.id ?? null,
+      location: "",
+      inviteeIds: null,
+      repeat: null,
+    });
+  }
 
   return (
     <>
@@ -49,8 +92,17 @@ export default function Groupe() {
             </Card>
 
             <Heading>{tg.groupPlans}</Heading>
-            {data.plans.length === 0 ? <Muted>Aucun plan à venir.</Muted> : null}
+            {flash ? <Body bold>{flash}</Body> : null}
+            {data.plans.length === 0 ? <Muted>{tg.noPlans}</Muted> : null}
             {data.plans.map((p) => <PlanCard key={p.id} plan={p} onChanged={() => void reload()} />)}
+            <Button label={tg.proposeMoment} variant="secondary" onPress={proposeFree} />
+
+            {group.members.length > 1 ? (
+              <>
+                <Heading>{t.meetups.title}</Heading>
+                <MeetupFinder groupId={group.id} members={group.members} onPropose={proposeFromSlot} />
+              </>
+            ) : null}
 
             <Heading>{`${tg.sections.members} (${group.members.length})`}</Heading>
             <Card>
@@ -61,10 +113,23 @@ export default function Groupe() {
                 </Row>
               ))}
             </Card>
-            <Muted>{group.members.length > 1 ? "Bientôt dans l'app : « Quand on peut se voir », trajets compris." : tg.aloneHint}</Muted>
+            {group.members.length <= 1 ? <Muted>{tg.aloneHint}</Muted> : null}
           </>
         ) : null}
       </Screen>
+      {draft && group ? (
+        <ProposeSheet
+          draft={draft}
+          members={group.members}
+          places={places}
+          onClose={() => setDraft(null)}
+          onSent={(message) => {
+            setDraft(null);
+            setFlash(message);
+            void reload();
+          }}
+        />
+      ) : null}
     </>
   );
 }

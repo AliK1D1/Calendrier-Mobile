@@ -222,3 +222,52 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
 });
+
+/** Pastille à choisir (choix unique ou multiple). */
+export function Chip({
+  label,
+  selected,
+  onPress,
+}: {
+  label: string;
+  selected: boolean;
+  onPress: () => void;
+}) {
+  const c = usePalette();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ selected }}
+      onPress={onPress}
+      style={({ pressed }) => [
+        chipStyles.chip,
+        {
+          backgroundColor: selected ? c.primary : c.card,
+          borderColor: selected ? c.primary : c.border,
+          opacity: pressed ? 0.85 : 1,
+        },
+      ]}
+    >
+      <Text style={{ color: selected ? c.primaryText : c.text, fontSize: 15, fontWeight: "600" }}>
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
+const chipStyles = StyleSheet.create({
+  chip: {
+    minHeight: 44,
+    paddingHorizontal: space.md + 2,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+});
+
+/** Libellé d'un groupe de champs. */
+export function Label({ children }: { children: ReactNode }) {
+  const c = usePalette();
+  return <Text style={[styles.label, { color: c.text }]}>{children}</Text>;
+}

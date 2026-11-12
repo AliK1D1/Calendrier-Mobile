@@ -1,0 +1,214 @@
+/**
+ * « Quand on peut se voir » sur le téléphone : même calcul que le site (`searchGroupMeetups`,
+ * fonctions pures copiées), lu avec la session de la personne connectée (RLS). Trajets
+ * estimés (distance × détour) : les vraies durées par API restent sur le serveur du site.
+ */
+import { useState } from "react";
+import { View } from "react-native";
+
+import { Body, Button, Card, Chip, ErrorText, Label, Muted, Row } from "@/components/ui";
+import { formatDuration } from "@/lib/i18n/format";
+import {
+  MEETUP_DURATIONS,
+  type MeetupSearchView,
+  type ProposalView,
+  searchGroupMeetups,
+  validateMeetupSearch,
+} from "@/lib/meetups/search";
+import { supabaseMeetupStore } from "@/lib/meetups/supabaseStore";
+import { MEETUP_PERIODS, type MeetupPeriod } from "@/lib/scheduling/period";
+import { EstimatedTravelProvider } from "@/lib/scheduling/travel";
+import { locale, t } from "@/services/i18n";
+import { useAuthed } from "@/services/session";
+import { space } from "@/theme/colors";
+
+const tm = t.meetups;
+const travel = new EstimatedTravelProvider();
+
+/** Propositions montrées avant « Voir les N propositions ». */
+const FIRST_CARDS = 5;
+
+export function MeetupFinder({
+  groupId,
+  members,
+  onPropose,
+}: {
+  groupId: string;
+  members: { userId: string; displayName: string }[];
+  onPropose: (p: ProposalView, participantIds: string[]) => void;
+}) {
+  const { supabase, userId } = useAuthed();
+  const [chosen, setChosen] = useState<string[]>(() => members.map((m) => m.userId));
+  const [period, setPeriod] = useState<MeetupPeriod>("this-week");
+  const [duration, setDuration] = useState<number>(60);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<MeetupSearchView | null>(null);
+  const [showAll, setShowAll] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+
+  function toggle(id: string) {
+    setChosen((list) => (list.includes(id) ? list.filter((x) => x !== id) : [...list, id]));
+  }
+
+  async function search(durationMinutes = duration, label: string | null = null) {
+    const input = validateMeetupSearch({
+      groupId,
+      participantIds: chosen,
+      period,
+      durationMinutes,
+      bufferMinutes: 5,
+    });
+    if (!input.ok) {
+      setError(input.error);
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await searchGroupMeetups(supabaseMeetupStore(supabase), input.value, {
+        userId,
+        now: new Date(),
+        travel,
+        locale,
+      });
+      if (!r.ok) setError(r.error);
+      else {
+        setResult(r.value);
+        setShowAll(false);
+        setNote(label);
+      }
+    } catch (e) {
+      console.error("Moments :", e);
+      setError("Le calcul n'a pas fonctionné. Réessaie.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const cards = result ? (showAll ? result.inPerson : result.inPerson.slice(0, FIRST_CARDS)) : [];
+
+  return (
+    <View style={{ gap: space.md }}>
+      <Card>
+        <Muted>{tm.help}</Muted>
+        <Label>{tm.who}</Label>
+        <Row>
+          {members.map((m) => (
+            <Chip
+              key={m.userId}
+              label={m.userId === userId ? `${m.displayName}${tm.you}` : m.displayName}
+              selected={chosen.includes(m.userId)}
+              onPress={() => toggle(m.userId)}
+            />
+          ))}
+        </Row>
+        <Label>{tm.period}</Label>
+        <Row>
+          {MEETUP_PERIODS.map((p) => (
+            <Chip key={p} label={tm.periods[p]} selected={period === p} onPress={() => setPeriod(p)} />
+          ))}
+        </Row>
+        <Label>{tm.atLeast}</Label>
+        <Row>
+          {MEETUP_DURATIONS.map((d) => (
+            <Chip key={d} label={formatDuration(d, locale)} selected={duration === d} onPress={() => setDuration(d)} />
+          ))}
+        </Row>
+        <ErrorText>{error}</ErrorText>
+        <Button
+          label={busy ? tm.computing : tm.find}
+          busy={busy}
+          disabled={busy || chosen.length < 2}
+          onPress={() => void search()}
+        />
+        {chosen.length < 2 ? <Muted>{tm.pickTwo}</Muted> : null}
+      </Card>
+
+      {result ? (
+        <>
+          {note ? <Body bold>{tm.withCompromise(note)}</Body> : null}
+          {result.excluded.length > 0 ? (
+            <Muted>{tm.excluded(result.excluded.map((x) => `${x.name} (${x.reason})`).join(", "))}</Muted>
+          ) : null}
+          {result.hiddenPlaceBlocks.length > 0 ? (
+            <Muted>
+              {`${tm.hiddenBefore}${result.hiddenPlaceBlocks.map((h) => tm.hiddenItem(h.name, h.count)).join(", ")}${tm.hiddenAfter}`}
+            </Muted>
+          ) : null}
+          {result.inPerson.length > 0 ? (
+            <Body bold>{`${tm.inPersonCount(result.inPerson.length)}${result.calls.length ? tm.callCount(result.calls.length) : ""}`}</Body>
+          ) : result.almost.length === 0 ? (
+            <Muted>
+              {result.calls[0]
+                ? tm.nothingWithCall(result.calls[0].dayLabel, result.calls[0].timeLabel)
+                : tm.nothing}
+            </Muted>
+          ) : null}
+
+          {cards.map((p) => (
+            <ProposalCard key={p.key} p={p} onPropose={() => onPropose(p, chosen)} />
+          ))}
+          {!showAll && result.inPerson.length > FIRST_CARDS ? (
+            <Button label={tm.seeAll(result.inPerson.length)} variant="secondary" onPress={() => setShowAll(true)} />
+          ) : null}
+
+          {result.almost.length > 0 ? (
+            <>
+              <Body bold>{tm.whyNot}</Body>
+              <Muted>{tm.almostIntro}</Muted>
+              {result.almost.map((a) => (
+                <Card key={a.key}>
+                  <Body bold>{`${a.dayLabel} · ${a.timeLabel}`}</Body>
+                  <Muted>{a.placeName}</Muted>
+                  <Muted>{a.sentence}</Muted>
+                  {a.compromises.length === 0 ? <Muted>{tm.noCompromise}</Muted> : null}
+                  {a.compromises.map((c, i) =>
+                    c.kind === "shorten" ? (
+                      <Button
+                        key={c.label}
+                        label={`${c.label}${i === 0 ? tm.simplest : ""}`}
+                        variant="secondary"
+                        disabled={busy}
+                        onPress={() => void search(c.durationMinutes, c.label)}
+                      />
+                    ) : (
+                      <Muted key={c.label}>{`• ${c.label}${i === 0 ? tm.simplest : ""}`}</Muted>
+                    ),
+                  )}
+                </Card>
+              ))}
+            </>
+          ) : null}
+
+          {result.calls.length > 0 ? (
+            <>
+              <Body bold>{result.inPerson.length > 0 ? tm.otherDaysCall : tm.possibleCalls}</Body>
+              {result.calls.map((p) => (
+                <ProposalCard key={p.key} p={p} onPropose={() => onPropose(p, chosen)} />
+              ))}
+            </>
+          ) : null}
+          <Muted>Trajets estimés d&apos;après la distance. Le site utilise les vrais temps de trajet quand ils sont disponibles.</Muted>
+        </>
+      ) : null}
+    </View>
+  );
+}
+
+function ProposalCard({ p, onPropose }: { p: ProposalView; onPropose: () => void }) {
+  return (
+    <Card>
+      <Body bold>{`${p.dayLabel} · ${p.timeLabel}`}</Body>
+      <Muted>{p.kind === "call" ? tm.callOrVideo : tm.at(p.placeName ?? t.plans.placeTbd)}</Muted>
+      {p.travel.length > 0 ? (
+        <Muted>
+          {`${tm.travel} ${p.travel
+            .map((x) => `${x.name} ${x.to} min${x.from !== x.to ? tm.back(x.from) : ""}`)
+            .join(", ")}`}
+        </Muted>
+      ) : null}
+      <Button label={tm.propose} variant="secondary" onPress={onPropose} />
+    </Card>
+  );
+}
