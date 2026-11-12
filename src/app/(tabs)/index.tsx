@@ -1,5 +1,5 @@
-import { Link } from "expo-router";
-import * as WebBrowser from "expo-web-browser";
+import { Link, router, useFocusEffect } from "expo-router";
+import { useCallback } from "react";
 
 import { PlanCard } from "@/components/plan-card";
 import { Body, Button, Card, ErrorText, Heading, Loading, Muted, Screen } from "@/components/ui";
@@ -8,7 +8,6 @@ import { loadPlans } from "@/lib/plans/queries";
 import { homePlans } from "@/lib/ux/homePlans";
 import { locale, t } from "@/services/i18n";
 import { useAuthed } from "@/services/session";
-import { SITE_URL } from "@/services/site";
 import { useLoad } from "@/services/use-load";
 import { usePalette } from "@/theme/use-palette";
 
@@ -25,6 +24,13 @@ export default function Accueil() {
     if (!plans.ok) throw new Error(plans.error);
     return { profile, onboarded, plans: homePlans(plans.views) };
   }, userId);
+  // Retour de l'accueil (bienvenue) ou d'un groupe : on relit les plans et l'état du profil.
+  useFocusEffect(
+    useCallback(() => {
+      void reload();
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []),
+  );
 
   return (
     <Screen title={t.home.hello(data?.profile?.display_name || undefined)} refreshing={refreshing} onRefresh={refresh}>
@@ -35,9 +41,9 @@ export default function Accueil() {
           <Body bold>Termine ta configuration</Body>
           <Muted>
             Choisis ton lieu « maison » et ton moyen de transport : sans eux, les moments proposés ne
-            tiennent pas compte de tes trajets. Pour l&apos;instant, ça se fait sur le site.
+            tiennent pas compte de tes trajets.
           </Muted>
-          <Button label="Ouvrir sur le site" variant="secondary" onPress={() => void WebBrowser.openBrowserAsync(`${SITE_URL}/bienvenue`)} />
+          <Button label="Commencer (3 questions)" onPress={() => router.push("/bienvenue")} />
         </Card>
       ) : null}
       {data ? (

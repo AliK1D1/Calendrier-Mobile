@@ -51,6 +51,7 @@ const SHARED = [
   "travel/fallback.ts",
   "geocoding/cache.ts",
   "geocoding/rateLimiter.ts",
+  "geocoding/nominatim.ts",
   "ux",
   "meetups/search.ts",
   "meetups/supabaseStore.ts",
