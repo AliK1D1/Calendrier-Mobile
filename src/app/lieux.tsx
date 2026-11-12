@@ -3,6 +3,7 @@ import { ActionSheetIOS, Alert, Platform } from "react-native";
 
 import { AddressSearch } from "@/components/address-search";
 import { ListGroup, ListRow } from "@/components/list";
+import { Reveal } from "@/components/motion";
 import { Toggle } from "@/components/toggle";
 import { Badge, Button, Card, EmptyState, ErrorText, Field, Fill, Heading, Label, Loading, Notice, Row, Screen, Section } from "@/components/ui";
 import { addPlace, deletePlace, renamePlace, setHome } from "@/features/settings";
@@ -110,6 +111,7 @@ export default function Lieux() {
       ) : null}
 
       {renaming ? (
+        <Reveal>
         <Card>
           <Field label={tl.newName} value={renaming.name} onChangeText={(v) => setRenaming({ id: renaming.id, name: v })} maxLength={100} autoFocus />
           <Row nowrap>
@@ -121,6 +123,7 @@ export default function Lieux() {
             </Fill>
           </Row>
         </Card>
+        </Reveal>
       ) : null}
 
       <Section>

@@ -7,6 +7,7 @@ import { useState } from "react";
 import { View } from "react-native";
 
 import { DateTile } from "@/components/date-tile";
+import { Appear } from "@/components/motion";
 import { Body, Button, Card, Chip, ErrorText, Fill, Footnote, Heading, Label, Meta, Muted, Notice, Row, Section, Segmented } from "@/components/ui";
 import { dayOfInstant } from "@/features/display";
 import { formatDuration } from "@/lib/i18n/format";
@@ -156,8 +157,8 @@ export function MeetupFinder({
             </Notice>
           ) : null}
 
-          {cards.map((p) => (
-            <ProposalCard key={p.key} p={p} onPropose={() => onPropose(p, chosen)} />
+          {cards.map((p, i) => (
+            <ProposalCard key={p.key} index={i} p={p} onPropose={() => onPropose(p, chosen)} />
           ))}
           {!showAll && result.inPerson.length > FIRST_CARDS ? (
             <Button label={tm.seeAll(result.inPerson.length)} variant="secondary" onPress={() => setShowAll(true)} />
@@ -169,8 +170,9 @@ export function MeetupFinder({
                 <Heading>{tm.whyNot}</Heading>
                 <Muted>{tm.almostIntro}</Muted>
               </View>
-              {result.almost.map((a) => (
-                <Card key={a.key}>
+              {result.almost.map((a, i) => (
+                <Appear key={a.key} index={i}>
+                <Card>
                   <Row nowrap align="flex-start" gap={space.md}>
                     <DateTile day={dayOfInstant(a.start)} dimmed />
                     <Fill>
@@ -197,6 +199,7 @@ export function MeetupFinder({
                     ),
                   )}
                 </Card>
+                </Appear>
               ))}
             </Section>
           ) : null}
@@ -204,8 +207,8 @@ export function MeetupFinder({
           {result.calls.length > 0 ? (
             <Section>
               <Heading>{result.inPerson.length > 0 ? tm.otherDaysCall : tm.possibleCalls}</Heading>
-              {result.calls.map((p) => (
-                <ProposalCard key={p.key} p={p} onPropose={() => onPropose(p, chosen)} />
+              {result.calls.map((p, i) => (
+                <ProposalCard key={p.key} index={i} p={p} onPropose={() => onPropose(p, chosen)} />
               ))}
             </Section>
           ) : null}
@@ -217,8 +220,9 @@ export function MeetupFinder({
 }
 
 /** Un moment trouvé : la date en étiquette, l'heure, le lieu, les trajets, et « Proposer ». */
-function ProposalCard({ p, onPropose }: { p: ProposalView; onPropose: () => void }) {
+function ProposalCard({ p, onPropose, index }: { p: ProposalView; onPropose: () => void; index: number }) {
   return (
+    <Appear index={index}>
     <Card>
       <Row nowrap align="flex-start" gap={space.md}>
         <DateTile day={dayOfInstant(p.start)} />
@@ -240,5 +244,6 @@ function ProposalCard({ p, onPropose }: { p: ProposalView; onPropose: () => void
       </Row>
       <Button size="small" label={tm.propose} onPress={onPropose} />
     </Card>
+    </Appear>
   );
 }

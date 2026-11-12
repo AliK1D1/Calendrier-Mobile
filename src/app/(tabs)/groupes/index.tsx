@@ -4,6 +4,7 @@ import { Pressable } from "react-native";
 
 import { Avatar } from "@/components/avatar";
 import { ListGroup, ListRow } from "@/components/list";
+import { Appear, Reveal } from "@/components/motion";
 import { Badge, Button, Card, EmptyState, ErrorText, Field, Loading, Muted, Screen, Section } from "@/components/ui";
 import { createGroup, joinGroup } from "@/features/actions";
 import { getMyGroups } from "@/lib/groups/queries";
@@ -63,6 +64,7 @@ export default function Groupes() {
         />
       ) : null}
       {data && data.length > 0 ? (
+        <Appear>
         <ListGroup>
           {data.map((g) => (
             // iPhone : appui long = aperçu du groupe (« Peek and Pop ») ; toucher l'ouvre.
@@ -86,6 +88,7 @@ export default function Groupes() {
             </Link>
           ))}
         </ListGroup>
+        </Appear>
       ) : null}
 
       <Section>
@@ -94,20 +97,24 @@ export default function Groupes() {
           <ListRow icon="link" title={tg.inviteTitle} onPress={() => toggle("join")} chevron={false} />
         </ListGroup>
         {open === "create" ? (
+          <Reveal key="create">
           <Card>
             <Field label={tg.nameLabel} placeholder={tg.namePlaceholder} value={name} onChangeText={setName} maxLength={60} autoFocus returnKeyType="done" onSubmitEditing={() => (name.trim() ? void onCreate() : undefined)} />
             <Muted>{tg.createHint}</Muted>
             <ErrorText>{formError.create}</ErrorText>
             <Button label={busy === "create" ? tg.creating : tg.create} busy={busy === "create"} disabled={busy !== null || !name.trim()} onPress={() => void onCreate()} />
           </Card>
+          </Reveal>
         ) : null}
         {open === "join" ? (
+          <Reveal key="join">
           <Card>
             <Field label={tg.codeLabel} value={code} onChangeText={setCode} autoCapitalize="none" autoCorrect={false} autoFocus returnKeyType="go" onSubmitEditing={() => (code.trim() ? void onJoin() : undefined)} />
             <Muted>{tg.inviteHint}</Muted>
             <ErrorText>{formError.join}</ErrorText>
             <Button label={tg.continue} busy={busy === "join"} disabled={busy !== null || !code.trim()} onPress={() => void onJoin()} />
           </Card>
+          </Reveal>
         ) : null}
       </Section>
     </Screen>

@@ -131,7 +131,7 @@ export default function Groupe() {
                     : `Aucun plan à venir. Cherche un moment ci-dessous, ou touche « ${tg.proposeMoment} ».`}
                 </Muted>
               ) : null}
-              {data.plans.map((p) => <PlanCard key={p.id} plan={p} onChanged={() => void reload()} />)}
+              {data.plans.map((p, i) => <PlanCard key={p.id} index={i} plan={p} onChanged={() => void reload()} />)}
             </Section>
 
             {!alone ? (

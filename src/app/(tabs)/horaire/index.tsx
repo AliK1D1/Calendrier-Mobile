@@ -7,6 +7,7 @@ import { ActionSheetIOS, Alert, Platform, Pressable, StyleSheet, Text, View } fr
 import { BlockSheet } from "@/components/block-sheet";
 import { icons } from "@/components/icons";
 import { ListGroup, ListRow } from "@/components/list";
+import { Swap } from "@/components/motion";
 import { Badge, Button, EmptyState, ErrorText, Heading, IconButton, Loading, Notice, Screen, Section } from "@/components/ui";
 import { defaultDay, weekRangeLabel } from "@/features/display";
 import { couleurJour, jourDeSemaine } from "@/features/apparence";
@@ -17,6 +18,7 @@ import { getMyBusyBlocks, getMyPlaces, getMyProfile } from "@/lib/profile";
 import { formatClockFr, isRecurring, suggestSession, WEEKDAY_SHORT, weekdayOf } from "@/lib/scheduling/weeklyBlocks";
 import { TIME_ZONE } from "@/lib/scheduling/time";
 import { t } from "@/services/i18n";
+import { hapticSelect } from "@/services/haptics";
 import { useAuthed } from "@/services/session";
 import { SITE_URL } from "@/services/site";
 import { useLoad, useReloadOnFocus } from "@/services/use-load";
@@ -191,7 +193,10 @@ export default function Horaire() {
                   accessibilityRole="tab"
                   accessibilityState={{ selected: on }}
                   accessibilityLabel={`${d.label}${d.isToday ? ", aujourd'hui" : ""}, ${count === 0 ? "libre" : `${count} bloc${count > 1 ? "s" : ""}`}`}
-                  onPress={() => setPicked(d.day)}
+                  onPress={() => {
+                    if (!on) hapticSelect();
+                    setPicked(d.day);
+                  }}
                   android_ripple={{ color: c.border, borderless: true, radius: 28 }}
                   style={({ pressed }) => [styles.day, { opacity: pressed && !ANDROID ? 0.5 : 1 }]}
                 >
@@ -220,6 +225,8 @@ export default function Horaire() {
         {!days && !error ? <Loading /> : null}
 
         {shown ? (
+          // Autre jour ou autre semaine : le détail arrive en fondu.
+          <Swap key={shown.day}>
           <Section>
             <Heading action={{ label: "Ajouter", onPress: addHere }}>{shownLabel}</Heading>
             {shown.items.length === 0 ? (
@@ -273,6 +280,7 @@ export default function Horaire() {
               </View>
             )}
           </Section>
+          </Swap>
         ) : null}
 
         <ListGroup footer="Importer un .ics, les calendriers abonnés et les disponibilités ponctuelles se gèrent sur le site.">
