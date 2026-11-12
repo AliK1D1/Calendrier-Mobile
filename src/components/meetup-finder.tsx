@@ -6,7 +6,9 @@
 import { useState } from "react";
 import { View } from "react-native";
 
-import { Body, Button, Card, Chip, ErrorText, Label, Muted, Row } from "@/components/ui";
+import { DateTile } from "@/components/date-tile";
+import { Body, Button, Card, Chip, ErrorText, Fill, Footnote, Heading, Label, Meta, Muted, Notice, Row, Section, Segmented } from "@/components/ui";
+import { dayOfInstant } from "@/features/display";
 import { formatDuration } from "@/lib/i18n/format";
 import {
   MEETUP_DURATIONS,
@@ -92,58 +94,66 @@ export function MeetupFinder({
     <View style={{ gap: space.md }}>
       <Card>
         <Muted>{tm.help}</Muted>
-        <Label>{tm.who}</Label>
-        <Row>
-          {members.map((m) => (
-            <Chip
-              key={m.userId}
-              label={m.userId === userId ? `${m.displayName}${tm.you}` : m.displayName}
-              selected={chosen.includes(m.userId)}
-              onPress={() => toggle(m.userId)}
-            />
-          ))}
-        </Row>
-        <Label>{tm.period}</Label>
-        <Row>
-          {MEETUP_PERIODS.map((p) => (
-            <Chip key={p} label={tm.periods[p]} selected={period === p} onPress={() => setPeriod(p)} />
-          ))}
-        </Row>
-        <Label>{tm.atLeast}</Label>
-        <Row>
-          {MEETUP_DURATIONS.map((d) => (
-            <Chip key={d} label={formatDuration(d, locale)} selected={duration === d} onPress={() => setDuration(d)} />
-          ))}
-        </Row>
+        <View style={{ gap: space.sm }}>
+          <Label>{tm.who}</Label>
+          <Row>
+            {members.map((m) => (
+              <Chip
+                key={m.userId}
+                label={m.userId === userId ? `${m.displayName}${tm.you}` : m.displayName}
+                selected={chosen.includes(m.userId)}
+                onPress={() => toggle(m.userId)}
+              />
+            ))}
+          </Row>
+        </View>
+        <View style={{ gap: space.sm }}>
+          <Label>{tm.period}</Label>
+          <Segmented
+            accessibilityLabel={tm.period}
+            options={MEETUP_PERIODS.map((p) => ({ value: p, label: tm.periods[p] }))}
+            value={period}
+            onChange={setPeriod}
+          />
+        </View>
+        <View style={{ gap: space.sm }}>
+          <Label>{tm.atLeast}</Label>
+          <Row>
+            {MEETUP_DURATIONS.map((d) => (
+              <Chip key={d} label={formatDuration(d, locale)} selected={duration === d} onPress={() => setDuration(d)} />
+            ))}
+          </Row>
+        </View>
         <ErrorText>{error}</ErrorText>
         <Button
+          icon="sparkles"
           label={busy ? tm.computing : tm.find}
           busy={busy}
           disabled={busy || chosen.length < 2}
           onPress={() => void search()}
         />
-        {chosen.length < 2 ? <Muted>{tm.pickTwo}</Muted> : null}
+        {chosen.length < 2 ? <Footnote center>{tm.pickTwo}</Footnote> : null}
       </Card>
 
       {result ? (
         <>
-          {note ? <Body bold>{tm.withCompromise(note)}</Body> : null}
+          {note ? <Notice tone="info">{tm.withCompromise(note)}</Notice> : null}
           {result.excluded.length > 0 ? (
-            <Muted>{tm.excluded(result.excluded.map((x) => `${x.name} (${x.reason})`).join(", "))}</Muted>
+            <Meta icon="info">{tm.excluded(result.excluded.map((x) => `${x.name} (${x.reason})`).join(", "))}</Meta>
           ) : null}
           {result.hiddenPlaceBlocks.length > 0 ? (
-            <Muted>
+            <Meta icon="lock">
               {`${tm.hiddenBefore}${result.hiddenPlaceBlocks.map((h) => tm.hiddenItem(h.name, h.count)).join(", ")}${tm.hiddenAfter}`}
-            </Muted>
+            </Meta>
           ) : null}
           {result.inPerson.length > 0 ? (
-            <Body bold>{`${tm.inPersonCount(result.inPerson.length)}${result.calls.length ? tm.callCount(result.calls.length) : ""}`}</Body>
+            <Heading>{`${tm.inPersonCount(result.inPerson.length)}${result.calls.length ? tm.callCount(result.calls.length) : ""}`}</Heading>
           ) : result.almost.length === 0 ? (
-            <Muted>
+            <Notice tone="info">
               {result.calls[0]
                 ? tm.nothingWithCall(result.calls[0].dayLabel, result.calls[0].timeLabel)
                 : tm.nothing}
-            </Muted>
+            </Notice>
           ) : null}
 
           {cards.map((p) => (
@@ -154,19 +164,29 @@ export function MeetupFinder({
           ) : null}
 
           {result.almost.length > 0 ? (
-            <>
-              <Body bold>{tm.whyNot}</Body>
-              <Muted>{tm.almostIntro}</Muted>
+            <Section>
+              <View style={{ gap: 2 }}>
+                <Heading>{tm.whyNot}</Heading>
+                <Muted>{tm.almostIntro}</Muted>
+              </View>
               {result.almost.map((a) => (
                 <Card key={a.key}>
-                  <Body bold>{`${a.dayLabel} · ${a.timeLabel}`}</Body>
-                  <Muted>{a.placeName}</Muted>
-                  <Muted>{a.sentence}</Muted>
+                  <Row nowrap align="flex-start" gap={space.md}>
+                    <DateTile day={dayOfInstant(a.start)} dimmed />
+                    <Fill>
+                      <View style={{ gap: 3 }}>
+                        <Body bold>{a.timeLabel}</Body>
+                        <Meta icon="pin" accessibilityLabel={`${a.dayLabel}, ${a.placeName}`}>{a.placeName}</Meta>
+                        <Meta icon="info">{a.sentence}</Meta>
+                      </View>
+                    </Fill>
+                  </Row>
                   {a.compromises.length === 0 ? <Muted>{tm.noCompromise}</Muted> : null}
                   {a.compromises.map((c, i) =>
                     c.kind === "shorten" ? (
                       <Button
                         key={c.label}
+                        size="small"
                         label={`${c.label}${i === 0 ? tm.simplest : ""}`}
                         variant="secondary"
                         disabled={busy}
@@ -178,37 +198,47 @@ export function MeetupFinder({
                   )}
                 </Card>
               ))}
-            </>
+            </Section>
           ) : null}
 
           {result.calls.length > 0 ? (
-            <>
-              <Body bold>{result.inPerson.length > 0 ? tm.otherDaysCall : tm.possibleCalls}</Body>
+            <Section>
+              <Heading>{result.inPerson.length > 0 ? tm.otherDaysCall : tm.possibleCalls}</Heading>
               {result.calls.map((p) => (
                 <ProposalCard key={p.key} p={p} onPropose={() => onPropose(p, chosen)} />
               ))}
-            </>
+            </Section>
           ) : null}
-          <Muted>Trajets estimés d&apos;après la distance. Le site utilise les vrais temps de trajet quand ils sont disponibles.</Muted>
+          <Footnote>Trajets estimés d&apos;après la distance. Le site utilise les vrais temps de trajet quand ils sont disponibles.</Footnote>
         </>
       ) : null}
     </View>
   );
 }
 
+/** Un moment trouvé : la date en étiquette, l'heure, le lieu, les trajets, et « Proposer ». */
 function ProposalCard({ p, onPropose }: { p: ProposalView; onPropose: () => void }) {
   return (
     <Card>
-      <Body bold>{`${p.dayLabel} · ${p.timeLabel}`}</Body>
-      <Muted>{p.kind === "call" ? tm.callOrVideo : tm.at(p.placeName ?? t.plans.placeTbd)}</Muted>
-      {p.travel.length > 0 ? (
-        <Muted>
-          {`${tm.travel} ${p.travel
-            .map((x) => `${x.name} ${x.to} min${x.from !== x.to ? tm.back(x.from) : ""}`)
-            .join(", ")}`}
-        </Muted>
-      ) : null}
-      <Button label={tm.propose} variant="secondary" onPress={onPropose} />
+      <Row nowrap align="flex-start" gap={space.md}>
+        <DateTile day={dayOfInstant(p.start)} />
+        <Fill>
+          <View style={{ gap: 3 }}>
+            <Body bold>{p.timeLabel}</Body>
+            <Meta icon={p.kind === "call" ? "call" : "pin"} accessibilityLabel={`${p.dayLabel}, ${p.kind === "call" ? tm.callOrVideo : (p.placeName ?? t.plans.placeTbd)}`}>
+              {p.kind === "call" ? tm.callOrVideo : (p.placeName ?? t.plans.placeTbd)}
+            </Meta>
+            {p.travel.length > 0 ? (
+              <Meta icon="travel">
+                {p.travel
+                  .map((x) => `${x.name} ${x.to} min${x.from !== x.to ? tm.back(x.from) : ""}`)
+                  .join(", ")}
+              </Meta>
+            ) : null}
+          </View>
+        </Fill>
+      </Row>
+      <Button size="small" label={tm.propose} onPress={onPropose} />
     </Card>
   );
 }

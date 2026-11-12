@@ -1,11 +1,13 @@
 import { useState } from "react";
 import { Pressable, View } from "react-native";
 
-import { Body, Button, ErrorText, Field, Muted } from "@/components/ui";
+import { Icon } from "@/components/icon";
+import { Body, Button, ErrorText, Field, Fill, Footnote, Muted } from "@/components/ui";
 import { searchAddress } from "@/features/geocode";
 import type { GeocodeResult } from "@/lib/geocoding/nominatim";
 import { t } from "@/services/i18n";
-import { radius, space } from "@/theme/colors";
+import { space } from "@/theme/colors";
+import { ANDROID, shape } from "@/theme/tokens";
 import { usePalette } from "@/theme/use-palette";
 
 const ts = t.places.search;
@@ -48,7 +50,7 @@ export function AddressSearch({
         returnKeyType="search"
         onSubmitEditing={() => void search()}
       />
-      <Button label={busy ? ts.searching : ts.button} variant="secondary" busy={busy} disabled={busy} onPress={() => void search()} />
+      <Button icon="search" label={busy ? ts.searching : ts.button} variant="secondary" busy={busy} disabled={busy || !query.trim()} onPress={() => void search()} />
       <ErrorText>{error}</ErrorText>
       {results?.map((r) => {
         const on = selected?.id === r.id;
@@ -58,22 +60,28 @@ export function AddressSearch({
             accessibilityRole="radio"
             accessibilityState={{ selected: on }}
             onPress={() => onSelect(r)}
-            style={{
-              borderWidth: on ? 2 : 1,
-              borderColor: on ? c.primary : c.border,
-              borderRadius: radius.md,
+            android_ripple={{ color: c.border }}
+            style={({ pressed }) => ({
+              flexDirection: "row",
+              alignItems: "center",
+              gap: space.md,
+              borderWidth: 2,
+              borderColor: on ? c.primary : "transparent",
+              borderRadius: shape.tile,
               padding: space.md,
-              gap: 2,
-              backgroundColor: c.card,
-            }}
+              backgroundColor: c.accent,
+              opacity: pressed && !ANDROID ? 0.6 : 1,
+            })}
           >
-            <Body bold>{on ? `✓ ${r.name}` : r.name}</Body>
-            {r.kind ? <Muted>{r.kind}</Muted> : null}
-            <Muted>{r.address}</Muted>
+            <Icon name={on ? "checkCircle" : "pin"} size={20} color={on ? c.primary : c.muted} />
+            <Fill>
+              <Body bold>{r.name}</Body>
+              <Muted>{[r.kind, r.address].filter(Boolean).join(" · ")}</Muted>
+            </Fill>
           </Pressable>
         );
       })}
-      {results && results.length > 0 ? <Muted>{ts.credit}</Muted> : null}
+      {results && results.length > 0 ? <Footnote>{ts.credit}</Footnote> : null}
     </View>
   );
 }

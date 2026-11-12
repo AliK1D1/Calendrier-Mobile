@@ -1,19 +1,42 @@
-import { Link, router } from "expo-router";
+import { formatInTimeZone } from "date-fns-tz";
+import { type Href, router } from "expo-router";
+import { StyleSheet, Text, View } from "react-native";
 
+import { Icon, type IconName } from "@/components/icon";
 import { PlanCard } from "@/components/plan-card";
-import { Body, Button, Card, ErrorText, Heading, Loading, Muted, Screen } from "@/components/ui";
+import { Body, Button, Card, EmptyState, ErrorText, Heading, Loading, Muted, Row, Screen, Section } from "@/components/ui";
+import { dayLabelFr } from "@/features/agenda";
 import { loadPlans } from "@/lib/plans/queries";
+import { TIME_ZONE } from "@/lib/scheduling/time";
 import { homePlans } from "@/lib/ux/homePlans";
 import { locale, t } from "@/services/i18n";
 import { useAuthed } from "@/services/session";
 import { getHomeProfile } from "@/services/home";
 import { useLoad, useReloadOnFocus } from "@/services/use-load";
+import { space } from "@/theme/colors";
+import { strong, type } from "@/theme/tokens";
 import { usePalette } from "@/theme/use-palette";
 
-/** Accueil : bonjour, plans qui attendent ma réponse, mes prochains plans. */
+/** Raccourci de l'accueil : une icône dans un rond et un mot, toute la tuile se touche. */
+function Shortcut({ icon, label, href }: { icon: IconName; label: string; href: Href }) {
+  const c = usePalette();
+  return (
+    <View style={{ flex: 1 }}>
+      <Card onPress={() => router.push(href)} accessibilityLabel={label} style={styles.shortcut}>
+        <View style={[styles.shortcutIcon, { backgroundColor: c.accent }]}>
+          <Icon name={icon} size={20} color={c.accentText} />
+        </View>
+        <Text numberOfLines={2} style={[type.footnote, strong, { color: c.text, textAlign: "center" }]}>
+          {label}
+        </Text>
+      </Card>
+    </View>
+  );
+}
+
+/** Accueil : bonjour, raccourcis, plans qui attendent ma réponse, mes prochains plans. */
 export default function Accueil() {
   const { supabase, userId } = useAuthed();
-  const c = usePalette();
   const { data, error, refreshing, refresh, reload, age } = useLoad(async () => {
     const [profile, plans] = await Promise.all([
       getHomeProfile(supabase, userId),
@@ -26,12 +49,20 @@ export default function Accueil() {
   // du profil, sauf à la première ouverture et si on vient de les lire.
   useReloadOnFocus(reload, age, 5_000);
 
+  const today = dayLabelFr(formatInTimeZone(new Date(), TIME_ZONE, "yyyy-MM-dd"));
+  const nothing = data && data.plans.awaiting.length + data.plans.upcoming.length === 0;
+
   return (
-    <Screen title={t.home.hello(data?.profile.displayName || undefined)} refreshing={refreshing} onRefresh={refresh}>
+    <Screen
+      title={t.home.hello(data?.profile.displayName || undefined)}
+      subtitle={today.charAt(0).toUpperCase() + today.slice(1)}
+      refreshing={refreshing}
+      onRefresh={refresh}
+    >
       <ErrorText>{error}</ErrorText>
       {!data && !error ? <Loading /> : null}
       {data?.onboarded === false ? (
-        <Card>
+        <Card tone="accent">
           <Body bold>Termine ta configuration</Body>
           <Muted>
             Choisis ton lieu « maison » et ton moyen de transport : sans eux, les moments proposés ne
@@ -40,26 +71,45 @@ export default function Accueil() {
           <Button label="Commencer (3 questions)" onPress={() => router.push("/bienvenue")} />
         </Card>
       ) : null}
-      {data ? (
-        <>
-          {data.plans.awaiting.length > 0 ? (
-            <>
-              <Heading>{t.home.plans.awaiting(data.plans.awaiting.length)}</Heading>
-              <Muted>{t.home.plans.awaitingHint}</Muted>
-              {data.plans.awaiting.map((p) => <PlanCard key={p.id} plan={p} onChanged={() => void reload()} />)}
-            </>
-          ) : null}
-          <Heading>{t.home.plans.upcoming}</Heading>
-          {data.plans.upcoming.length === 0 ? (
-            <Muted>{t.plans.nothingToAnswer} Ouvre un groupe pour trouver un moment.</Muted>
-          ) : (
-            data.plans.upcoming.map((p) => <PlanCard key={p.id} plan={p} onChanged={() => void reload()} />)
-          )}
-          <Link href="/plans" style={{ color: c.primary, fontSize: 16, fontWeight: "600", paddingVertical: 8 }}>
-            {t.home.plans.seeAll(data.plans.moreUpcoming)}
-          </Link>
-        </>
+
+      <Row nowrap gap={space.md} align="stretch">
+        <Shortcut icon="sparkles" label={t.home.findMoment} href="/groupes" />
+        <Shortcut icon="calendar" label={t.schedule.title} href="/horaire" />
+        <Shortcut icon="study" label="Étude" href="/etude" />
+      </Row>
+
+      {data && data.plans.awaiting.length > 0 ? (
+        <Section>
+          <View style={{ gap: 2 }}>
+            <Heading>{t.home.plans.awaiting(data.plans.awaiting.length)}</Heading>
+            <Muted>{t.home.plans.awaitingHint}</Muted>
+          </View>
+          {data.plans.awaiting.map((p) => <PlanCard key={p.id} plan={p} onChanged={() => void reload()} />)}
+        </Section>
+      ) : null}
+
+      {data && data.plans.upcoming.length > 0 ? (
+        <Section>
+          <Heading action={{ label: data.plans.moreUpcoming > 0 ? `Tout voir (${data.plans.upcoming.length + data.plans.moreUpcoming})` : "Tout voir", onPress: () => router.push("/plans") }}>
+            {t.home.plans.upcoming}
+          </Heading>
+          {data.plans.upcoming.map((p) => <PlanCard key={p.id} plan={p} onChanged={() => void reload()} />)}
+        </Section>
+      ) : null}
+
+      {nothing ? (
+        <EmptyState
+          icon="calendar"
+          title="Aucun plan pour l'instant"
+          text="Ouvre un groupe, cherche quand vous pouvez vous voir, puis propose un moment."
+          action={{ label: t.home.myGroups, icon: "group", onPress: () => router.push("/groupes") }}
+        />
       ) : null}
     </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  shortcut: { flex: 1, alignItems: "center", paddingVertical: space.md + 2, paddingHorizontal: space.sm, gap: space.sm },
+  shortcutIcon: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
+});

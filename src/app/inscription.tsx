@@ -2,7 +2,8 @@ import { router } from "expo-router";
 import { useState } from "react";
 import { KeyboardAvoidingView, Platform } from "react-native";
 
-import { Button, Card, ErrorText, Field, Muted, Screen } from "@/components/ui";
+import { Button, Card, ErrorText, Field, Footnote, Screen } from "@/components/ui";
+import { space } from "@/theme/colors";
 import { normalizeEmail } from "@/features/auth";
 import { normalizeUsername, passwordProblems, signUpErrorCode, validateSignup } from "@/lib/auth/signup";
 import { t } from "@/services/i18n";
@@ -60,7 +61,7 @@ export default function Inscription() {
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
       <Screen edges={[]} subtitle={ts.description}>
-        <Card>
+        <Card style={{ gap: space.md }}>
           <Field
             label={t.auth.email}
             placeholder={t.auth.emailPlaceholder}
@@ -91,7 +92,7 @@ export default function Inscription() {
             textContentType="newPassword"
           />
           {missing.length > 0 ? (
-            <Muted>{`Il manque : ${missing.map((p) => ts.rules[p]).join(", ")}.`}</Muted>
+            <Footnote>{`Il manque : ${missing.map((p) => ts.rules[p]).join(", ")}.`}</Footnote>
           ) : null}
           <Field
             label={ts.confirm}

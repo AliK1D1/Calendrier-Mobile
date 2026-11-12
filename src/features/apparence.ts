@@ -99,6 +99,7 @@ export function paletteAccent(id: AccentId, scheme: Scheme): HexPalette {
       accentText: o(0.95, k * 0.05),
       danger: o(0.69, 0.18, 24),
       success: o(0.72, 0.14, 155),
+      warning: o(0.78, 0.14, 70),
     };
   }
   return {
@@ -113,6 +114,7 @@ export function paletteAccent(id: AccentId, scheme: Scheme): HexPalette {
     accentText: o(0.3, k * 0.6),
     danger: o(0.56, 0.2, 27),
     success: o(0.55, 0.13, 155),
+    warning: o(0.55, 0.13, 60),
   };
 }
 
