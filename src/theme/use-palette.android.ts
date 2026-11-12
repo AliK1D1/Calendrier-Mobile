@@ -1,12 +1,12 @@
 import { Color, DarkTheme, DefaultTheme, type Theme } from "expo-router";
-import { useColorScheme } from "react-native";
 
-import { type HexPalette, palettes, type Scheme } from "./colors";
+import { ACCENT_APPAREIL, paletteAccent } from "@/features/apparence";
+import { useApparence } from "@/services/apparence";
 
-/** Mode (clair ou sombre) choisi sur le téléphone. */
-export function useScheme(): Scheme {
-  return useColorScheme() === "dark" ? "dark" : "light";
-}
+import { type HexPalette, palettes } from "./colors";
+import { useScheme } from "./scheme";
+
+export { useScheme };
 
 /** Une couleur dynamique Material 3, ou la couleur fixe si le téléphone ne la donne pas. */
 function dyn(value: unknown, fallback: string): string {
@@ -14,12 +14,17 @@ function dyn(value: unknown, fallback: string): string {
 }
 
 /**
- * Android : rôles de couleur Material 3 dynamiques (Material You). Sur Android 12+, ils viennent
- * du fond d'écran ; sinon les couleurs Material 3 de base. `useColorScheme()` fait relire les
- * couleurs quand le mode sombre change.
+ * Android, rôles de couleur Material 3 :
+ * - « Couleurs du téléphone » (par défaut) : couleurs dynamiques Material You, tirées du fond
+ *   d'écran sur Android 12+, sinon les couleurs de base ;
+ * - un accent du site (bleu, rose…) : toute la palette est tirée de cet accent, comme un
+ *   schéma Material 3 à couleur source (surfaces légèrement teintées, comme sur le site).
+ * Le mode sombre est relu à chaque changement (`useScheme`).
  */
 export function usePalette(): HexPalette {
   const scheme = useScheme();
+  const { accent } = useApparence();
+  if (accent !== ACCENT_APPAREIL) return paletteAccent(accent, scheme);
   const f = palettes[scheme];
   const m = Color.android.dynamic;
   return {

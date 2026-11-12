@@ -1,22 +1,24 @@
 import { DarkTheme, DefaultTheme, type Theme } from "expo-router";
-import { useColorScheme } from "react-native";
 
-import { type Palette, palettes, type Scheme } from "./colors";
+import { paletteAccent } from "@/features/apparence";
+import { ACCENT_PAR_DEFAUT } from "@/lib/ux/apparence";
+import { useApparence } from "@/services/apparence";
 
-/** Mode (clair ou sombre) choisi sur l'appareil. */
-export function useScheme(): Scheme {
-  return useColorScheme() === "dark" ? "dark" : "light";
-}
+import type { HexPalette } from "./colors";
+import { useScheme } from "./scheme";
 
-/** Web : la palette fixe du site, en mode clair ou sombre selon l'appareil. */
-export function usePalette(): Palette {
-  return palettes[useScheme()];
+export { useScheme };
+
+/** Web : la palette du site pour l'accent choisi, en mode clair ou sombre. */
+export function usePalette(): HexPalette {
+  const { accent } = useApparence();
+  return paletteAccent(accent === "appareil" ? ACCENT_PAR_DEFAUT : accent, useScheme());
 }
 
 /** Thème de la navigation (fond des écrans, en-têtes) assorti à la palette. */
 export function useNavTheme(): Theme {
   const scheme = useScheme();
-  const c = palettes[scheme];
+  const c = usePalette();
   const base = scheme === "dark" ? DarkTheme : DefaultTheme;
   return {
     ...base,

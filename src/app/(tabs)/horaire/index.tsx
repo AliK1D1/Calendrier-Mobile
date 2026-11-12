@@ -7,6 +7,7 @@ import { ActionSheetIOS, Alert, Platform, Pressable, View } from "react-native";
 import { BlockSheet } from "@/components/block-sheet";
 import { icons } from "@/components/icons";
 import { Badge, Body, Button, Card, ErrorText, Loading, Muted, Row, Screen } from "@/components/ui";
+import { couleurJour, jourDeSemaine } from "@/features/apparence";
 import { type AgendaItem, dayLabelFr, mondayOf, weekAgenda } from "@/features/agenda";
 import { type BlockDraft, editBlockDraft, isEditableSource, newBlockDraft, setOccurrence } from "@/features/blocks";
 import { toBlockSpec } from "@/lib/db/convert";
@@ -18,7 +19,7 @@ import { useAuthed } from "@/services/session";
 import { SITE_URL } from "@/services/site";
 import { useLoad, useReloadOnFocus } from "@/services/use-load";
 import { space } from "@/theme/colors";
-import { usePalette } from "@/theme/use-palette";
+import { usePalette, useScheme } from "@/theme/use-palette";
 
 const tb = t.schedule.block;
 
@@ -35,6 +36,7 @@ const SOURCE_LABEL: Record<string, string> = {
 export default function Horaire() {
   const { supabase, userId } = useAuthed();
   const c = usePalette();
+  const scheme = useScheme();
   const [offset, setOffset] = useState(0);
   const [draft, setDraft] = useState<BlockDraft | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
@@ -177,6 +179,12 @@ export default function Horaire() {
         {days?.map((d) => (
           <Card key={d.day} style={d.isToday ? { borderColor: c.primary, borderWidth: 2 } : undefined}>
             <Row>
+              {/* Couleur propre à chaque jour, comme la grille de l'horaire du site. */}
+              <View
+                accessibilityElementsHidden
+                importantForAccessibility="no"
+                style={{ width: 12, height: 12, borderRadius: 6, alignSelf: "center", backgroundColor: couleurJour(jourDeSemaine(d.day), scheme) }}
+              />
               <Body bold>{d.label.charAt(0).toUpperCase() + d.label.slice(1)}</Body>
               {d.isToday ? <Badge>Aujourd&apos;hui</Badge> : null}
             </Row>

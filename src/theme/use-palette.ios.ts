@@ -1,19 +1,27 @@
 import { Color, DarkTheme, DefaultTheme, type Theme } from "expo-router";
-import { useColorScheme } from "react-native";
 
-import { type Palette, palettes, type Scheme } from "./colors";
+import { paletteAccent } from "@/features/apparence";
+import { ACCENT_PAR_DEFAUT } from "@/lib/ux/apparence";
+import { useApparence } from "@/services/apparence";
 
-/** Mode (clair ou sombre) choisi sur l'iPhone. */
-export function useScheme(): Scheme {
-  return useColorScheme() === "dark" ? "dark" : "light";
+import type { Palette, Scheme } from "./colors";
+import { useScheme } from "./scheme";
+
+export { useScheme };
+
+/** Couleur d'accent choisie dans Profil > Apparence (bleu Freecrew par défaut). */
+function useAccent(scheme: Scheme) {
+  const { accent } = useApparence();
+  return paletteAccent(accent === "appareil" ? ACCENT_PAR_DEFAUT : accent, scheme);
 }
 
 /**
  * iPhone : couleurs système d'Apple. Elles suivent seules le mode sombre, le contraste élevé et
- * les réglages d'accessibilité. Seule la couleur d'accent garde le bleu Freecrew.
+ * les réglages d'accessibilité. Seule la couleur d'accent (boutons, liens, puces choisies)
+ * vient du choix de Profil > Apparence, comme la teinte d'une app sur iOS.
  */
 export function usePalette(): Palette {
-  const brand = palettes[useScheme()];
+  const brand = useAccent(useScheme());
   return {
     background: Color.ios.systemGroupedBackground,
     card: Color.ios.secondarySystemGroupedBackground,
@@ -40,9 +48,10 @@ const IOS_HEX: Record<Scheme, { background: string; card: string; text: string; 
 
 export function useNavTheme(): Theme {
   const scheme = useScheme();
+  const brand = useAccent(scheme);
   const base = scheme === "dark" ? DarkTheme : DefaultTheme;
   return {
     ...base,
-    colors: { ...base.colors, ...IOS_HEX[scheme], primary: palettes[scheme].primary },
+    colors: { ...base.colors, ...IOS_HEX[scheme], primary: brand.primary },
   };
 }

@@ -1,10 +1,12 @@
 import type { ColorValue } from "react-native";
 
 /**
- * Couleurs de l'app. Mode clair et mode sombre suivent toujours le réglage du téléphone.
+ * Couleurs de l'app. Mode clair et mode sombre suivent le réglage du téléphone, sauf si
+ * Profil > Apparence force l'un des deux ; la couleur d'accent vient aussi de Profil > Apparence
+ * (features/apparence.ts, mêmes accents que le site).
  *
  * - `palettes` : couleurs fixes, proches du site (palette bleue de src/app/globals.css du site).
- *   Servent sur le web et de repli quand une couleur du système n'existe pas.
+ *   Servent de repli quand une couleur du système n'existe pas.
  * - Sur iPhone (`use-palette.ios.ts`) : couleurs système d'Apple (fond groupé, étiquettes,
  *   séparateurs, rouge et vert système), qui changent seules avec le mode sombre.
  * - Sur Android (`use-palette.android.ts`) : rôles de couleur Material 3 dynamiques (Material You,

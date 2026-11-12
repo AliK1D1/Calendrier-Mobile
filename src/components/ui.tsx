@@ -317,10 +317,13 @@ export function Chip({
   label,
   selected,
   onPress,
+  swatch,
 }: {
   label: string;
   selected: boolean;
   onPress: () => void;
+  /** Pastille de couleur avant le texte (choix d'une couleur d'accent). */
+  swatch?: string;
 }) {
   const c = usePalette();
   const colors = IOS
@@ -339,14 +342,25 @@ export function Chip({
         { backgroundColor: colors.bg, borderColor: colors.border, opacity: pressed && !ANDROID ? 0.7 : 1 },
       ]}
     >
-      <Text style={[chipStyles.text, { color: colors.fg }]}>
-        {ANDROID && selected ? `✓  ${label}` : label}
-      </Text>
+      <View style={chipStyles.inner}>
+        {swatch ? (
+          <View
+            accessibilityElementsHidden
+            importantForAccessibility="no"
+            style={[chipStyles.swatch, { backgroundColor: swatch, borderColor: colors.fg }]}
+          />
+        ) : null}
+        <Text style={[chipStyles.text, { color: colors.fg }]}>
+          {ANDROID && selected ? `✓  ${label}` : label}
+        </Text>
+      </View>
     </Pressable>
   );
 }
 
 const chipStyles = StyleSheet.create({
+  inner: { flexDirection: "row", alignItems: "center", gap: space.sm },
+  swatch: { width: 16, height: 16, borderRadius: 8, borderWidth: StyleSheet.hairlineWidth },
   chip: {
     minHeight: 44,
     paddingHorizontal: Platform.OS === "android" ? space.lg : space.md + 2,
