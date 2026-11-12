@@ -1,18 +1,19 @@
-import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from "expo-router";
+import { Stack, ThemeProvider } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
-import { useColorScheme } from "react-native";
 
 import { SessionProvider, useSession } from "@/services/session";
-import { palettes } from "@/theme/colors";
+import { headerOptions } from "@/theme/header-options";
+import { useNavTheme, usePalette } from "@/theme/use-palette";
 
 void SplashScreen.preventAutoHideAsync();
 
 function RootStack() {
   const { session } = useSession();
-  const scheme = useColorScheme() === "dark" ? "dark" : "light";
-  const c = palettes[scheme];
+  // Thème clair ou sombre : toujours celui de l'appareil (app.json : userInterfaceStyle « automatic »).
+  const theme = useNavTheme();
+  const c = usePalette();
 
   useEffect(() => {
     if (session !== undefined) void SplashScreen.hideAsync();
@@ -21,17 +22,11 @@ function RootStack() {
   // Écran de démarrage tant que la session gardée sur le téléphone n'est pas lue.
   if (session === undefined) return null;
   const signedIn = session !== null;
-  const base = scheme === "dark" ? DarkTheme : DefaultTheme;
 
   return (
-    <ThemeProvider
-      value={{
-        ...base,
-        colors: { ...base.colors, primary: c.primary, background: c.background, card: c.card, text: c.text, border: c.border },
-      }}
-    >
+    <ThemeProvider value={theme}>
       <StatusBar style="auto" />
-      <Stack screenOptions={{ headerBackButtonDisplayMode: "minimal", contentStyle: { backgroundColor: c.background } }}>
+      <Stack screenOptions={headerOptions(c)}>
         <Stack.Protected guard={signedIn}>
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="groupe/[id]" options={{ title: "Groupe" }} />

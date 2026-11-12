@@ -1,18 +1,27 @@
 import { NativeTabs } from "expo-router/native-tabs";
+import { Platform } from "react-native";
 
 import { usePalette } from "@/theme/use-palette";
 
-/** Onglets du bas : mêmes sections que la barre d'onglets du site sur téléphone. */
+/**
+ * Onglets du bas : mêmes sections que la barre d'onglets du site sur téléphone.
+ * - iPhone : barre d'onglets d'Apple (Liquid Glass sur iOS 26, qui se réduit quand on fait
+ *   défiler), icônes SF Symbols, teinte bleue Freecrew.
+ * - Android : barre de navigation Material 3 (surface, pastille d'indicateur, icônes Material).
+ */
 export default function TabsLayout() {
   const c = usePalette();
+  const android = Platform.OS === "android";
   return (
     <NativeTabs
-      backgroundColor={c.card}
-      indicatorColor={c.accent}
-      labelStyle={{ selected: { color: c.primary } }}
-      tintColor={c.primary}
+      minimizeBehavior="onScrollDown"
+      tintColor={android ? c.accentText : c.primary}
+      backgroundColor={android ? c.card : undefined}
+      indicatorColor={android ? c.accent : undefined}
+      iconColor={android ? { default: c.muted, selected: c.accentText } : undefined}
+      labelStyle={android ? { default: { color: c.muted }, selected: { color: c.text } } : undefined}
     >
-      <NativeTabs.Trigger name="index">
+      <NativeTabs.Trigger name="(accueil)">
         <NativeTabs.Trigger.Label>Accueil</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon sf={{ default: "house", selected: "house.fill" }} md="home" />
       </NativeTabs.Trigger>

@@ -1,22 +1,35 @@
+import type { ColorValue } from "react-native";
+
 /**
- * Couleurs de l'app, proches de celles du site (palette bleue par défaut, src/app/globals.css
- * du site). Mode clair et mode sombre suivent le téléphone.
+ * Couleurs de l'app. Mode clair et mode sombre suivent toujours le réglage du téléphone.
+ *
+ * - `palettes` : couleurs fixes, proches du site (palette bleue de src/app/globals.css du site).
+ *   Servent sur le web et de repli quand une couleur du système n'existe pas.
+ * - Sur iPhone (`use-palette.ios.ts`) : couleurs système d'Apple (fond groupé, étiquettes,
+ *   séparateurs, rouge et vert système), qui changent seules avec le mode sombre.
+ * - Sur Android (`use-palette.android.ts`) : rôles de couleur Material 3 dynamiques (Material You,
+ *   tirés du fond d'écran sur Android 12+), avec repli sur la palette fixe.
  */
 export interface Palette {
-  background: string;
-  card: string;
-  text: string;
-  muted: string;
-  border: string;
-  primary: string;
-  primaryText: string;
-  accent: string;
-  accentText: string;
-  danger: string;
-  success: string;
+  background: ColorValue;
+  card: ColorValue;
+  text: ColorValue;
+  muted: ColorValue;
+  border: ColorValue;
+  primary: ColorValue;
+  primaryText: ColorValue;
+  accent: ColorValue;
+  accentText: ColorValue;
+  danger: ColorValue;
+  success: ColorValue;
 }
 
-export const palettes: Record<"light" | "dark", Palette> = {
+/** Palette en codes hexadécimaux (le thème de navigation demande des chaînes). */
+export type HexPalette = { [K in keyof Palette]: string };
+
+export type Scheme = "light" | "dark";
+
+export const palettes: Record<Scheme, HexPalette> = {
   light: {
     background: "#f5f7fb",
     card: "#ffffff",

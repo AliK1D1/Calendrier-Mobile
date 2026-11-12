@@ -2,7 +2,9 @@ import Constants from "expo-constants";
 import { router } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
 import { useState } from "react";
-import { Switch, View } from "react-native";
+import { View } from "react-native";
+
+import { Toggle } from "@/components/toggle";
 
 import { Body, Button, Card, Chip, ErrorText, Field, Heading, Label, Loading, Muted, Row, Screen } from "@/components/ui";
 import { shiftClock } from "@/features/blocks";
@@ -17,7 +19,6 @@ import { useAuthed, useSession } from "@/services/session";
 import { SITE_URL } from "@/services/site";
 import { useLoad } from "@/services/use-load";
 import { space } from "@/theme/colors";
-import { usePalette } from "@/theme/use-palette";
 
 type Saved = { ok: true } | { ok: false; error: string };
 
@@ -102,7 +103,6 @@ function ProfileForms({
   supabaseSignOut: () => Promise<unknown>;
 }) {
   const { supabase, userId } = useAuthed();
-  const c = usePalette();
   const q = data.quiet ? quietHoursFromDb(data.quiet.unavailable_before, data.quiet.unavailable_after) : { before: null, after: null };
   const l = data.limits ? outingLimitsFromDb(data.limits.max_outings_per_day, data.limits.max_outings_per_week) : { perDay: null, perWeek: null };
 
@@ -175,7 +175,7 @@ function ProfileForms({
           <View style={{ flex: 1 }}>
             <Body>Les membres de mes groupes voient « Occupé » au lieu du titre de mes cours</Body>
           </View>
-          <Switch value={hide} onValueChange={setHide} trackColor={{ true: c.primary }} accessibilityLabel="Masquer le titre de mes cours" />
+          <Toggle value={hide} onValueChange={setHide} accessibilityLabel="Masquer le titre de mes cours" />
         </Row>
         <Message msg={pv.msg} />
         <Button label={pv.busy ? "Enregistrement…" : "Enregistrer"} variant="secondary" busy={pv.busy} disabled={pv.busy} onPress={() => void pv.run(savePrivacy(supabase, userId, hide), "Réglage enregistré.")} />

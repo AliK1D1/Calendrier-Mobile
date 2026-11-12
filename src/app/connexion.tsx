@@ -36,7 +36,7 @@ export default function Connexion() {
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-      <Screen>
+      <Screen edges={["top"]}>
         <View style={{ gap: space.xs, marginTop: space.xl }}>
           <Body bold>Freecrew</Body>
           <Title>{t.auth.title}</Title>
