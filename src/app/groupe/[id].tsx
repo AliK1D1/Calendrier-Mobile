@@ -1,6 +1,8 @@
 import { Stack, useLocalSearchParams } from "expo-router";
 import { useState } from "react";
-import { Share } from "react-native";
+import { Platform, Share } from "react-native";
+
+import { icons } from "@/components/icons";
 
 import { MeetupFinder } from "@/components/meetup-finder";
 import { ProposeSheet } from "@/components/propose-sheet";
@@ -72,9 +74,20 @@ export default function Groupe() {
     });
   }
 
+  const share = () => {
+    if (group && link) void Share.share({ message: `${tg.shareText(group.name)} : ${link}` });
+  };
+
   return (
     <>
       <Stack.Screen options={{ title: group?.name ?? "Groupe" }} />
+      {Platform.OS !== "web" && group ? (
+        // Barre d'outils native : partager l'invitation et proposer un moment.
+        <Stack.Toolbar placement="right">
+          <Stack.Toolbar.Button icon={icons.share} accessibilityLabel={tg.share} onPress={share} />
+          <Stack.Toolbar.Button icon={icons.add} accessibilityLabel={tg.proposeMoment} onPress={proposeFree} />
+        </Stack.Toolbar>
+      ) : null}
       <Screen edges={[]} refreshing={refreshing} onRefresh={refresh}>
         <ErrorText>{error}</ErrorText>
         {!data && !error ? <Loading /> : null}
@@ -85,10 +98,7 @@ export default function Groupe() {
               <Body bold>{group.members.length <= 1 ? tg.inviteFirst : tg.inviteFriends}</Body>
               <Muted>{tg.inviteBody}</Muted>
               <Muted>{link}</Muted>
-              <Button
-                label={tg.share}
-                onPress={() => void Share.share({ message: `${tg.shareText(group.name)} : ${link}` })}
-              />
+              <Button label={tg.share} onPress={share} />
             </Card>
 
             <Heading>{tg.groupPlans}</Heading>

@@ -1,7 +1,9 @@
 import { formatInTimeZone } from "date-fns-tz";
 import { router } from "expo-router";
 import { useState } from "react";
-import { Alert, ScrollView, Switch, View } from "react-native";
+import { Alert, ScrollView, View } from "react-native";
+
+import { Toggle } from "@/components/toggle";
 
 import { Badge, Body, Button, Card, Chip, ErrorText, Field, Heading, Label, Loading, Muted, Row, Screen } from "@/components/ui";
 import { shiftClock } from "@/features/blocks";
@@ -135,10 +137,9 @@ export default function Etude() {
           {plan.sessions.length === 0 ? <Muted>{ts.panel.none}</Muted> : null}
           {plan.sessions.map((s) => (
             <Row key={s.key}>
-              <Switch
+              <Toggle
                 value={chosen.includes(s.key)}
                 onValueChange={(v) => setChosen((list) => (v ? [...list, s.key] : list.filter((k) => k !== s.key)))}
-                trackColor={{ true: c.primary }}
                 accessibilityLabel={s.title}
               />
               <View style={{ flex: 1 }}>

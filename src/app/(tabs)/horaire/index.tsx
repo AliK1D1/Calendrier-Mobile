@@ -1,10 +1,11 @@
 import { formatInTimeZone } from "date-fns-tz";
-import { router, useFocusEffect } from "expo-router";
+import { router, Stack, useFocusEffect } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
 import { useCallback, useState } from "react";
-import { Alert, Pressable, View } from "react-native";
+import { ActionSheetIOS, Alert, Platform, Pressable, View } from "react-native";
 
 import { BlockSheet } from "@/components/block-sheet";
+import { icons } from "@/components/icons";
 import { Badge, Body, Button, Card, ErrorText, Loading, Muted, Row, Screen } from "@/components/ui";
 import { type AgendaItem, dayLabelFr, mondayOf, weekAgenda } from "@/features/agenda";
 import { type BlockDraft, editBlockDraft, isEditableSource, newBlockDraft, setOccurrence } from "@/features/blocks";
@@ -96,19 +97,61 @@ export default function Horaire() {
       Alert.alert(item.title, b.source === "meetup" ? "Un plan de groupe se gère dans l'onglet Plans." : "Ce bloc se gère sur le site.");
       return;
     }
-    const buttons: { text: string; style?: "cancel" | "destructive"; onPress?: () => void }[] = [
-      { text: tb.editTitle, onPress: () => setDraft(editBlockDraft(b, day, session)) },
+    const actions: { text: string; destructive?: boolean; run: () => void }[] = [
+      { text: tb.editTitle, run: () => setDraft(editBlockDraft(b, day, session)) },
     ];
     if (isRecurring(b)) {
-      if (item.skipped) buttons.push({ text: "Rétablir cette fois-ci", onPress: () => void occurrence(item, day, false) });
-      else if (day >= today) buttons.push({ text: tb.skipOnce(dayLabelFr(day)), onPress: () => void occurrence(item, day, true) });
+      if (item.skipped) actions.push({ text: "Rétablir cette fois-ci", run: () => void occurrence(item, day, false) });
+      else if (day >= today) actions.push({ text: tb.skipOnce(dayLabelFr(day)), destructive: true, run: () => void occurrence(item, day, true) });
     }
-    buttons.push({ text: "Fermer", style: "cancel" });
-    Alert.alert(item.title, `${dayLabelFr(day)}, ${item.timeLabel}${isRecurring(b) && !item.skipped ? `\n${tb.skipHint}` : ""}`, buttons);
+    const message = `${dayLabelFr(day)}, ${item.timeLabel}${isRecurring(b) && !item.skipped ? `\n${tb.skipHint}` : ""}`;
+    if (Platform.OS === "ios") {
+      // iPhone : feuille d'actions d'Apple, qui monte du bas de l'écran.
+      const options = [...actions.map((a) => a.text), "Annuler"];
+      const destructive = actions.findIndex((a) => a.destructive);
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          title: item.title,
+          message,
+          options,
+          cancelButtonIndex: options.length - 1,
+          destructiveButtonIndex: destructive >= 0 ? destructive : undefined,
+          tintColor: c.primary,
+        },
+        (index) => actions[index]?.run(),
+      );
+      return;
+    }
+    // Android : boîte de dialogue Material.
+    Alert.alert(item.title, message, [
+      ...actions.map((a) => ({ text: a.text, onPress: a.run })),
+      { text: "Fermer", style: "cancel" as const },
+    ]);
   }
+
+  const native = Platform.OS !== "web";
+  const addFirst = () => newBlock(days?.[0]?.day ?? today);
+  const openSite = () => void WebBrowser.openBrowserAsync(`${SITE_URL}/horaire`);
 
   return (
     <>
+      {native ? (
+        // Barre d'outils native : « + » pour ajouter un bloc, et un menu pour le reste.
+        <Stack.Toolbar placement="right">
+          <Stack.Toolbar.Button icon={icons.add} accessibilityLabel={tb.newTitle} disabled={!data} onPress={addFirst} />
+          <Stack.Toolbar.Menu icon={icons.more} accessibilityLabel="Plus d'actions">
+            <Stack.Toolbar.MenuAction icon={icons.study} onPress={() => router.push("/etude")}>
+              Étude
+            </Stack.Toolbar.MenuAction>
+            <Stack.Toolbar.MenuAction icon={icons.today} disabled={offset === 0} onPress={() => setOffset(0)}>
+              Revenir à cette semaine
+            </Stack.Toolbar.MenuAction>
+            <Stack.Toolbar.MenuAction icon={icons.web} onPress={openSite}>
+              Ouvrir l&apos;horaire sur le site
+            </Stack.Toolbar.MenuAction>
+          </Stack.Toolbar.Menu>
+        </Stack.Toolbar>
+      ) : null}
       <Screen title={t.schedule.title} refreshing={refreshing} onRefresh={refresh}>
         <Row>
           <View style={{ flex: 1 }}>
@@ -119,14 +162,16 @@ export default function Horaire() {
           </View>
         </Row>
         {offset !== 0 ? <Button label="Revenir à cette semaine" variant="secondary" onPress={() => setOffset(0)} /> : null}
-        <Row>
-          <View style={{ flex: 1 }}>
-            <Button label={`+ ${tb.newTitle}`} disabled={!data} onPress={() => newBlock(days?.[0]?.day ?? today)} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Button label="Étude" variant="secondary" onPress={() => router.push("/etude")} />
-          </View>
-        </Row>
+        {native ? null : (
+          <Row>
+            <View style={{ flex: 1 }}>
+              <Button label={`+ ${tb.newTitle}`} disabled={!data} onPress={addFirst} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Button label="Étude" variant="secondary" onPress={() => router.push("/etude")} />
+            </View>
+          </Row>
+        )}
         {flash ? <Body bold>{flash}</Body> : null}
         <ErrorText>{actionError}</ErrorText>
         <ErrorText>{error}</ErrorText>
@@ -167,7 +212,7 @@ export default function Horaire() {
           </Card>
         ))}
         <Muted>Importer un .ics, les calendriers abonnés et les disponibilités ponctuelles se gèrent sur le site.</Muted>
-        <Button label="Ouvrir l'horaire sur le site" variant="secondary" onPress={() => void WebBrowser.openBrowserAsync(`${SITE_URL}/horaire`)} />
+        <Button label="Ouvrir l'horaire sur le site" variant="secondary" onPress={openSite} />
       </Screen>
       {draft && data ? (
         <BlockSheet

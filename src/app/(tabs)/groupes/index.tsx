@@ -1,6 +1,6 @@
 import { Link, router } from "expo-router";
 import { useState } from "react";
-import { Pressable, View } from "react-native";
+import { Platform, Pressable, View } from "react-native";
 
 import { Badge, Body, Button, Card, ErrorText, Field, Heading, Loading, Muted, Row, Screen } from "@/components/ui";
 import { createGroup, joinGroup } from "@/features/actions";
@@ -9,12 +9,14 @@ import { t } from "@/services/i18n";
 import { useAuthed } from "@/services/session";
 import { useLoad } from "@/services/use-load";
 import { space } from "@/theme/colors";
+import { usePalette } from "@/theme/use-palette";
 
 const tg = t.groups;
 
 /** Mes groupes, créer un groupe, rejoindre avec un lien ou un code. */
 export default function Groupes() {
   const { supabase, userId } = useAuthed();
+  const c = usePalette();
   const { data, error, refreshing, refresh } = useLoad(() => getMyGroups(supabase, userId), userId);
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
@@ -47,16 +49,20 @@ export default function Groupes() {
       {!data && !error ? <Loading /> : null}
       {data && data.length === 0 ? <Muted>{tg.none}</Muted> : null}
       {data?.map((g) => (
+        // iPhone : appui long = aperçu du groupe (« Peek and Pop ») ; toucher l'ouvre.
         <Link key={g.id} href={{ pathname: "/groupe/[id]", params: { id: g.id } }} asChild>
-          <Pressable accessibilityRole="link">
-            <Card>
-              <Body bold>{g.name}</Body>
-              <Row>
-                <Muted>{tg.members(g.memberCount)}</Muted>
-                {g.role === "admin" ? <Badge>{tg.admin}</Badge> : null}
-              </Row>
-            </Card>
-          </Pressable>
+          <Link.Trigger>
+            <Pressable accessibilityRole="link" android_ripple={{ color: c.text, foreground: true }} style={{ borderRadius: Platform.OS === "ios" ? 14 : 12, overflow: "hidden" }}>
+              <Card>
+                <Body bold>{g.name}</Body>
+                <Row>
+                  <Muted>{tg.members(g.memberCount)}</Muted>
+                  {g.role === "admin" ? <Badge>{tg.admin}</Badge> : null}
+                </Row>
+              </Card>
+            </Pressable>
+          </Link.Trigger>
+          <Link.Preview />
         </Link>
       ))}
 
