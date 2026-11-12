@@ -1,0 +1,621 @@
+/**
+ * « Quand on peut se voir » (segment 11) : validation de la demande, lecture des données du
+ * groupe par un magasin injecté (Supabase dans l'app, PGlite dans les tests), conversion
+ * (`toPeople`), appel à `findMeetups` et mise en forme des propositions pour l'interface.
+ *
+ * Aucun accès BD direct ici : le magasin lit **au nom de la personne connectée** (son jeton,
+ * donc la RLS), jamais avec une clé service. L'horaire des autres membres vient uniquement de
+ * `group_busy_blocks` (titres masqués, et seulement pour un membre du groupe).
+ *
+ * Lieux non visibles : un bloc peut pointer vers un lieu que la RLS ne nous laisse pas lire
+ * (ex. le lieu favori d'un AUTRE groupe de ce membre, ou un lieu supprimé). Le bloc compte
+ * quand même comme occupé (l'heure est toujours respectée), mais on suppose que la personne
+ * est **chez elle** pendant ce bloc (même règle que `toPeople` pour un lieu inconnu). Le
+ * nombre de blocs concernés est renvoyé pour l'afficher. Ces lieux ne sont jamais proposés.
+ */
+import { formatInTimeZone } from "date-fns-tz";
+
+import {
+  type AvailabilitySlotInput,
+  type BusyBlockInput,
+  type PlaceInput,
+  type ProfileInput,
+  isRecurringRow,
+  toPeople,
+  toPlace,
+} from "@/lib/db/convert";
+import { type Result } from "@/lib/places/validation";
+import { availabilityGrid } from "@/lib/scheduling/availabilityGrid";
+import {
+  type AlmostMeetup,
+  type Compromise,
+  MIN_SHORTENED_MINUTES,
+  explainNoMeetup,
+  explainSentence,
+} from "@/lib/scheduling/explainNoMeetup";
+import { findMeetups } from "@/lib/scheduling/findMeetups";
+import {
+  ceilToMinutes,
+  localDay,
+  MEETUP_PERIODS,
+  type MeetupPeriod,
+  periodRange,
+} from "@/lib/scheduling/period";
+import { minutesBetween, TIME_ZONE } from "@/lib/scheduling/time";
+import { prefetchRequestsFor, type TravelTimeProvider } from "@/lib/scheduling/travel";
+import type { DateRange, DayHours, MeetupProposal, Person, PersonId } from "@/lib/scheduling/types";
+import { parseClock } from "@/lib/scheduling/weeklyBlocks";
+import type { Locale } from "@/lib/i18n/config";
+import { formatClockLocale, formatDuration, formatInstantDay } from "@/lib/i18n/format";
+import { getMessages } from "@/lib/i18n/messages";
+
+/** Durées minimales proposées, en minutes. */
+export const MEETUP_DURATIONS = [30, 45, 60, 90, 120] as const;
+export type MeetupDuration = (typeof MEETUP_DURATIONS)[number];
+
+/**
+ * Durée la plus longue acceptée. En plus des durées du menu, une durée réduite par un
+ * compromis « Pourquoi pas ? » (multiple de 5, au moins 15 min) est acceptée.
+ */
+export const MAX_MEETUP_DURATION = 120;
+
+/** Durée acceptée : une du menu, ou un multiple de 5 min entre 15 min et 2 h. */
+export function isValidMeetupDuration(d: unknown): d is number {
+  return (
+    typeof d === "number" &&
+    Number.isInteger(d) &&
+    d >= MIN_SHORTENED_MINUTES &&
+    d <= MAX_MEETUP_DURATION &&
+    d % 5 === 0
+  );
+}
+
+/** Marge par défaut ajoutée à chaque trajet, en minutes. */
+export const DEFAULT_BUFFER_MINUTES = 5;
+/** Marge maximale acceptée, en minutes. */
+export const MAX_BUFFER_MINUTES = 30;
+/**
+ * Propositions gardées par jour. Plus que le défaut de findMeetups (3) : une courte pause
+ * commune au cégep (ex. 30 min mardi midi, prédite au segment 4) a un score plus bas que les
+ * longues soirées et serait sinon coupée. L'interface montre d'abord les meilleures.
+ */
+export const MAX_PROPOSALS_PER_DAY = 5;
+
+/** Nombre maximal de participants d'une recherche (borne le coût du calcul). */
+export const MAX_PARTICIPANTS = 20;
+
+/**
+ * Lieux essayés au plus par une recherche. Chaque lieu candidat est essayé pour chaque jour et
+ * chaque participant : sans borne, quelqu'un qui crée des milliers de lieux (par l'API REST)
+ * bloquerait le serveur plusieurs secondes à chaque recherche. Au-delà, on garde les maisons,
+ * puis les favoris du groupe, puis les autres lieux de chacun à tour de rôle.
+ */
+export const MAX_CANDIDATE_PLACES = 80;
+
+/** Blocs d'horaire des participants dans la période, au plus (même raison). */
+export const MAX_SEARCH_BLOCKS = 4000;
+
+/** Demande validée. */
+export interface MeetupSearchInput {
+  groupId: string;
+  participantIds: string[];
+  period: MeetupPeriod;
+  /** Durée du menu, ou durée réduite par un compromis (voir `isValidMeetupDuration`). */
+  durationMinutes: number;
+  bufferMinutes: number;
+}
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Valide la demande envoyée par le formulaire (rien n'est supposé sur sa forme). */
+export function validateMeetupSearch(raw: unknown): Result<MeetupSearchInput> {
+  if (typeof raw !== "object" || raw === null) return { ok: false, error: "Demande invalide." };
+  const r = raw as Record<string, unknown>;
+
+  if (typeof r.groupId !== "string" || !UUID.test(r.groupId)) {
+    return { ok: false, error: "Groupe introuvable." };
+  }
+  if (!Array.isArray(r.participantIds)) return { ok: false, error: "Choisis les participants." };
+  if (r.participantIds.length > MAX_PARTICIPANTS) {
+    return { ok: false, error: `Au plus ${MAX_PARTICIPANTS} participants.` };
+  }
+  const ids: string[] = [];
+  for (const id of r.participantIds) {
+    if (typeof id !== "string" || !UUID.test(id)) {
+      return { ok: false, error: "Participant introuvable." };
+    }
+    const lower = id.toLowerCase();
+    if (!ids.includes(lower)) ids.push(lower);
+  }
+  if (ids.length < 2) return { ok: false, error: "Choisis au moins deux participants." };
+
+  if (typeof r.period !== "string" || !MEETUP_PERIODS.includes(r.period as MeetupPeriod)) {
+    return { ok: false, error: "Période invalide." };
+  }
+  if (!isValidMeetupDuration(r.durationMinutes)) {
+    return { ok: false, error: "Durée invalide (entre 15 min et 2 h, par tranches de 5 min)." };
+  }
+  const buffer = r.bufferMinutes ?? DEFAULT_BUFFER_MINUTES;
+  if (
+    typeof buffer !== "number" ||
+    !Number.isInteger(buffer) ||
+    buffer < 0 ||
+    buffer > MAX_BUFFER_MINUTES
+  ) {
+    return { ok: false, error: `La marge doit être entre 0 et ${MAX_BUFFER_MINUTES} min.` };
+  }
+  return {
+    ok: true,
+    value: {
+      groupId: r.groupId.toLowerCase(),
+      participantIds: ids,
+      period: r.period as MeetupPeriod,
+      durationMinutes: r.durationMinutes,
+      bufferMinutes: buffer,
+    },
+  };
+}
+
+export type StoreResult<T> = { ok: true; value: T } | { ok: false; error: string };
+
+/**
+ * Lectures nécessaires, toujours au nom de la personne connectée (RLS). Chaque méthode
+ * correspond à une requête supabase-js (voir src/app/groupes/meetup-actions.ts).
+ */
+export interface MeetupStore {
+  /** Membres du groupe (vide si je n'en fais pas partie : RLS de `group_members`). */
+  memberIds(groupId: string): Promise<StoreResult<string[]>>;
+  /** Profils (nom, mode de transport, maison, heures « je ne sors pas »). */
+  profiles(ids: string[]): Promise<StoreResult<ProfileInput[]>>;
+  /** Lieux personnels (`group_id` nul) de ces personnes, ceux que la RLS laisse voir. */
+  personalPlaces(ownerIds: string[]): Promise<StoreResult<PlaceInput[]>>;
+  /** Lieux favoris de ce groupe. */
+  groupPlaces(groupId: string): Promise<StoreResult<PlaceInput[]>>;
+  /** Blocs des membres par `group_busy_blocks(gid)` (titres masqués selon leur choix). */
+  groupBlocks(groupId: string): Promise<StoreResult<BusyBlockInput[]>>;
+  /**
+   * Disponibilités ponctuelles des membres par `group_availability_slots(gid)` (segment 18,
+   * sans la note). Absent : aucune.
+   */
+  groupAvailabilities?(groupId: string): Promise<StoreResult<AvailabilitySlotInput[]>>;
+}
+
+/** Disponibilités ponctuelles d'un groupe, ou aucune si le magasin ne les lit pas. */
+export async function readGroupAvailabilities(
+  store: MeetupStore,
+  groupId: string,
+): Promise<StoreResult<AvailabilitySlotInput[]>> {
+  return store.groupAvailabilities ? store.groupAvailabilities(groupId) : { ok: true, value: [] };
+}
+
+/** Trajet d'une personne pour une proposition. */
+export interface TravelView {
+  personId: string;
+  name: string;
+  /** Aller (minutes, sans la marge). */
+  to: number;
+  /** Retour vers son lieu suivant (minutes, sans la marge). */
+  from: number;
+}
+
+/** Proposition prête à afficher (sérialisable). */
+export interface ProposalView {
+  key: string;
+  kind: "in-person" | "call";
+  placeId: string | null;
+  placeName: string | null;
+  start: string;
+  end: string;
+  /** « mardi 16 septembre » */
+  dayLabel: string;
+  /** « 12 h – 12 h 30 » */
+  timeLabel: string;
+  durationMinutes: number;
+  travel: TravelView[];
+  score: number;
+}
+
+/** Ligne de la grille (sérialisable). */
+export interface GridDayView {
+  day: string;
+  dayLabel: string;
+  slots: { start: string; label: string; free: string[] }[];
+}
+
+/** Participant écarté du calcul, avec la raison affichée. */
+export interface ExcludedView {
+  id: string;
+  name: string;
+  reason: string;
+}
+
+/** Compromis « Pourquoi pas ? » prêt à afficher (sérialisable). */
+export type CompromiseView =
+  | { kind: "shorten"; label: string; durationMinutes: number }
+  | {
+      kind: "other-place";
+      label: string;
+      placeId: string;
+      placeName: string;
+      start: string;
+      end: string;
+    }
+  | { kind: "without"; label: string; personId: string; name: string; start: string; end: string }
+  | { kind: "call"; label: string; start: string; end: string };
+
+/**
+ * « Presque » : moment commun trop court, avec la phrase qui explique pourquoi et les
+ * compromis, du plus petit au plus grand. Jamais de titre de bloc ni de lieu d'avant/après.
+ */
+export interface AlmostView {
+  key: string;
+  placeId: string;
+  placeName: string;
+  start: string;
+  end: string;
+  dayLabel: string;
+  timeLabel: string;
+  sharedMinutes: number;
+  missingMinutes: number;
+  /** Nom de la personne qui coupe le plus le moment (`null` si personne en particulier). */
+  limitingName: string | null;
+  sentence: string;
+  compromises: CompromiseView[];
+}
+
+export interface MeetupSearchView {
+  range: DateRange;
+  participants: { id: string; name: string }[];
+  excluded: ExcludedView[];
+  /** Propositions en personne, de la meilleure à la moins bonne. */
+  inPerson: ProposalView[];
+  /** Appels proposés les jours sans rencontre en personne possible. */
+  calls: ProposalView[];
+  /**
+   * « Pourquoi pas ? » (story 4) : seulement quand il n'y a aucune rencontre en personne, au
+   * plus 3 moments presque possibles. Vide sinon.
+   */
+  almost: AlmostView[];
+  /** Blocs dont le lieu n'est pas visible (supposés à la maison), par nom de personne. */
+  hiddenPlaceBlocks: { name: string; count: number }[];
+  grid: GridDayView[];
+  /** Durée du calcul (findMeetups + grille), en millisecondes. */
+  computeMs: number;
+}
+
+export interface SearchDeps {
+  /** Personne connectée. */
+  userId: string;
+  /** Maintenant (injecté pour les tests). */
+  now: Date;
+  travel: TravelTimeProvider;
+  /** Heures considérées (défaut de findMeetups : 8 h à 22 h). */
+  dayHours?: DayHours;
+  /** Horloge pour mesurer le calcul (défaut : performance.now). */
+  clock?: () => number;
+  /** Langue des libellés (français par défaut). */
+  locale?: Locale;
+}
+
+const NOT_MEMBER = "Groupe introuvable.";
+
+/**
+ * Cherche les moments réalistes pour les participants choisis d'un groupe.
+ * Refuse si la personne connectée n'est pas membre, ou si un participant n'est pas membre.
+ */
+export async function searchGroupMeetups(
+  store: MeetupStore,
+  input: MeetupSearchInput,
+  deps: SearchDeps,
+): Promise<Result<MeetupSearchView>> {
+  const members = await store.memberIds(input.groupId);
+  if (!members.ok) return members;
+  if (!members.value.includes(deps.userId)) return { ok: false, error: NOT_MEMBER };
+  const memberSet = new Set(members.value);
+  if (input.participantIds.some((id) => !memberSet.has(id))) {
+    return { ok: false, error: "Un des participants ne fait pas partie du groupe." };
+  }
+
+  const range = periodRange(input.period, localDay(deps.now));
+  const ids = input.participantIds;
+  const locale = deps.locale ?? "fr";
+  const t = getMessages(locale).meetups;
+  const [profiles, personal, favorites, blocks, availabilities] = await Promise.all([
+    store.profiles(ids),
+    store.personalPlaces(ids),
+    store.groupPlaces(input.groupId),
+    store.groupBlocks(input.groupId),
+    readGroupAvailabilities(store, input.groupId),
+  ]);
+  if (!availabilities.ok) return availabilities;
+  if (!profiles.ok) return profiles;
+  if (!personal.ok) return personal;
+  if (!favorites.ok) return favorites;
+  if (!blocks.ok) return blocks;
+
+  const idSet = new Set(ids);
+  // Défense en profondeur : on ne garde que les lignes des participants et du groupe.
+  const profileRows = profiles.value.filter((p) => idSet.has(p.id));
+  const personalRows = personal.value.filter((p) => idSet.has(p.owner_id));
+  const blockRows = blocks.value.filter((b) => idSet.has(b.owner_id));
+  if (blockRows.filter((b) => blockTouchesRange(b, range)).length > MAX_SEARCH_BLOCKS) {
+    return {
+      ok: false,
+      error:
+        "L'horaire des participants a trop de blocs pour ce calcul. Choisis moins de participants.",
+    };
+  }
+  const placeRows = dedupeById([...personalRows, ...favorites.value]);
+
+  const nameOf = new Map(profileRows.map((p) => [p.id, p.display_name || t.noName]));
+  const excluded: ExcludedView[] = ids
+    .filter((id) => !nameOf.has(id))
+    .map((id) => ({ id, name: t.member, reason: t.unreadableProfile }));
+
+  const knownPlaceIds = new Set(placeRows.map((p) => p.id));
+  const hiddenCount = new Map<string, number>();
+  for (const b of blockRows) {
+    if (b.place_id && !knownPlaceIds.has(b.place_id)) {
+      hiddenCount.set(b.owner_id, (hiddenCount.get(b.owner_id) ?? 0) + 1);
+    }
+  }
+
+  // L'ordre des participants suit la demande (affichage des trajets stable).
+  const ordered = ids.flatMap((id) => profileRows.filter((p) => p.id === id));
+  const converted = toPeople(ordered, placeRows, blockRows, range, {
+    availabilities: availabilities.value.filter((a) => idSet.has(a.owner_id)),
+  });
+  for (const inc of converted.incomplete) {
+    excluded.push({
+      id: inc.id,
+      name: nameOf.get(inc.id) ?? inc.name,
+      reason: t.noHome,
+    });
+  }
+  const people = converted.people;
+  const participants = people.map((p) => ({ id: p.id, name: p.name || t.noName }));
+  const displayName = new Map(participants.map((p) => [p.id, p.name]));
+
+  const base: MeetupSearchView = {
+    range,
+    participants,
+    excluded,
+    inPerson: [],
+    calls: [],
+    almost: [],
+    hiddenPlaceBlocks: [...hiddenCount]
+      .filter(([id]) => displayName.has(id))
+      .map(([id, count]) => ({ name: displayName.get(id) ?? t.member, count })),
+    grid: [],
+    computeMs: 0,
+  };
+  if (people.length < 2) return { ok: true, value: base };
+
+  const favoritePlaces = favorites.value.map(toPlace);
+  const candidatePlaceIds = limitCandidatePlaces(people, favorites.value, MAX_CANDIDATE_PLACES);
+  // Vrais temps de trajet (segment 15) : préparés AVANT le calcul, en quelques appels bornés ;
+  // findMeetups n'attend jamais le réseau. Sans clé d'API, `prefetch` n'existe pas.
+  if (deps.travel.prefetch) {
+    await deps.travel
+      .prefetch(prefetchRequestsFor(people, favoritePlaces, candidatePlaceIds), {
+        budgetKey: deps.userId,
+      })
+      .catch((e: unknown) => console.warn("Temps de trajet (préparation) :", e));
+  }
+
+  const clock = deps.clock ?? (() => performance.now());
+  const t0 = clock();
+  const meetupRequest = {
+    personIds: people.map((p) => p.id),
+    dates: range,
+    minDurationMinutes: input.durationMinutes,
+    bufferMinutes: input.bufferMinutes,
+    favoritePlaces,
+    candidatePlaceIds,
+    dayHours: deps.dayHours,
+    notBefore: ceilToMinutes(deps.now, 15),
+  };
+  const proposals = await findMeetups(people, meetupRequest, deps.travel, {
+    maxPerDay: MAX_PROPOSALS_PER_DAY,
+  });
+  // « Pourquoi pas ? » : seulement sans rencontre en personne. Mêmes paires de lieux que la
+  // recherche, déjà préparées : aucun appel d'API de trajet de plus.
+  const almost = proposals.some((p) => p.kind === "in-person")
+    ? []
+    : await explainNoMeetup(people, meetupRequest, deps.travel);
+  const grid = availabilityGrid(people, range, { dayHours: deps.dayHours });
+  const computeMs = clock() - t0;
+
+  const placeName = new Map(placeRows.map((p) => [p.id, p.name]));
+  const views = proposals.map((p, i) => toView(p, i, placeName, displayName, participants, locale));
+  return {
+    ok: true,
+    value: {
+      ...base,
+      inPerson: views.filter((v) => v.kind === "in-person"),
+      calls: views.filter((v) => v.kind === "call"),
+      almost: almost.map((a, i) => toAlmostView(a, i, placeName, displayName, locale)),
+      grid: grid.map((d) => ({
+        day: d.day,
+        dayLabel: dayLabel(d.slots[0]?.start ?? new Date(`${d.day}T12:00:00Z`), locale),
+        slots: d.slots.map((s) => ({
+          start: s.start.toISOString(),
+          label: `${clockLabel(s.start, locale)} – ${clockLabel(s.end, locale)}`,
+          free: s.freeIds.map((id) => displayName.get(id) ?? "?"),
+        })),
+      })),
+      computeMs,
+    },
+  };
+}
+
+/** Le bloc peut-il tomber dans la période ? (ponctuel : son jour ; qui revient : sa validité) */
+function blockTouchesRange(b: BusyBlockInput, range: DateRange): boolean {
+  if (!isRecurringRow(b)) {
+    return b.valid_from !== null && b.valid_from >= range.from && b.valid_from <= range.to;
+  }
+  return (
+    (b.valid_until === null || b.valid_until >= range.from) &&
+    (b.valid_from === null || b.valid_from <= range.to)
+  );
+}
+
+/**
+ * Lieux candidats à passer à findMeetups, ou `undefined` (tous les lieux, comportement par
+ * défaut) quand il y en a au plus `max`. Sinon : les maisons, puis les favoris du groupe, puis
+ * les autres lieux de chaque participant à tour de rôle, jusqu'à `max`.
+ */
+export function limitCandidatePlaces(
+  people: readonly Person[],
+  favorites: readonly PlaceInput[],
+  max: number,
+): string[] | undefined {
+  const all = new Set<string>();
+  for (const person of people) for (const p of person.places) all.add(p.id);
+  for (const f of favorites) all.add(f.id);
+  if (all.size <= max) return undefined;
+
+  const chosen = new Set<string>();
+  const add = (id: string) => {
+    if (chosen.size < max) chosen.add(id);
+  };
+  for (const person of people) add(person.homePlaceId);
+  for (const f of favorites) add(f.id);
+  const longest = Math.max(0, ...people.map((p) => p.places.length));
+  for (let i = 0; i < longest && chosen.size < max; i++) {
+    for (const person of people) {
+      const place = person.places[i];
+      if (place) add(place.id);
+    }
+  }
+  return [...chosen];
+}
+
+function dedupeById<T extends { id: string }>(rows: T[]): T[] {
+  const seen = new Map<string, T>();
+  for (const r of rows) seen.set(r.id, r);
+  return [...seen.values()];
+}
+
+/** « mardi 16 septembre » (fuseau de l'app ; « Tuesday, September 16 » en anglais). */
+export function dayLabel(instant: Date, locale: Locale = "fr"): string {
+  return formatInstantDay(instant, "weekdayDayMonth", locale);
+}
+
+/** « 12 h 30 » (fuseau de l'app ; minuit → « minuit » ; « 12:30 PM » en anglais). */
+export function clockLabel(instant: Date, locale: Locale = "fr"): string {
+  const minutes = parseClock(formatInTimeZone(instant, TIME_ZONE, "HH:mm"));
+  return minutes === null ? "" : formatClockLocale(minutes, locale);
+}
+
+function toView(
+  p: MeetupProposal,
+  index: number,
+  placeName: ReadonlyMap<string, string>,
+  displayName: ReadonlyMap<PersonId, string>,
+  participants: { id: string; name: string }[],
+  locale: Locale,
+): ProposalView {
+  const t = getMessages(locale).meetups;
+  return {
+    key: `${p.kind}-${p.placeId ?? "appel"}-${p.start.toISOString()}-${index}`,
+    kind: p.kind,
+    placeId: p.placeId,
+    placeName: p.placeId ? (placeName.get(p.placeId) ?? t.place) : null,
+    start: p.start.toISOString(),
+    end: p.end.toISOString(),
+    dayLabel: dayLabel(p.start, locale),
+    timeLabel: `${clockLabel(p.start, locale)} – ${clockLabel(p.end, locale)}`,
+    durationMinutes: Math.round(minutesBetween(p.start, p.end)),
+    travel: participants.map(({ id }) => ({
+      personId: id,
+      name: displayName.get(id) ?? "?",
+      to: p.travelByPerson[id]?.to ?? 0,
+      from: p.travelByPerson[id]?.from ?? 0,
+    })),
+    score: Math.round(p.score * 100) / 100,
+  };
+}
+
+function compromiseView(
+  c: Compromise,
+  placeName: ReadonlyMap<string, string>,
+  displayName: ReadonlyMap<PersonId, string>,
+  locale: Locale,
+): CompromiseView {
+  const t = getMessages(locale).meetups;
+  const fmt = (m: number) => formatDuration(Math.floor(m), locale);
+  const duration = (start: Date, end: Date) => fmt(minutesBetween(start, end));
+  const clock = (d: Date) => clockLabel(d, locale);
+  switch (c.kind) {
+    case "shorten":
+      return {
+        kind: "shorten",
+        label: t.shortenTo(fmt(c.durationMinutes)),
+        durationMinutes: c.durationMinutes,
+      };
+    case "other-place": {
+      const name = placeName.get(c.placeId) ?? t.place;
+      return {
+        kind: "other-place",
+        label: t.meetAt(name, clock(c.start), duration(c.start, c.end)),
+        placeId: c.placeId,
+        placeName: name,
+        start: c.start.toISOString(),
+        end: c.end.toISOString(),
+      };
+    }
+    case "without": {
+      const name = displayName.get(c.personId) ?? t.thisPerson;
+      return {
+        kind: "without",
+        label: t.meetWithout(name, duration(c.start, c.end)),
+        personId: c.personId,
+        name,
+        start: c.start.toISOString(),
+        end: c.end.toISOString(),
+      };
+    }
+    case "call":
+      return {
+        kind: "call",
+        label: t.makeCall(clock(c.start), clock(c.end)),
+        start: c.start.toISOString(),
+        end: c.end.toISOString(),
+      };
+  }
+}
+
+function toAlmostView(
+  a: AlmostMeetup,
+  index: number,
+  placeName: ReadonlyMap<string, string>,
+  displayName: ReadonlyMap<PersonId, string>,
+  locale: Locale,
+): AlmostView {
+  const place = placeName.get(a.placeId) ?? getMessages(locale).meetups.place;
+  const limitingName = a.limiting ? (displayName.get(a.limiting.personId) ?? null) : null;
+  return {
+    key: `presque-${a.placeId}-${a.start.toISOString()}-${index}`,
+    placeId: a.placeId,
+    placeName: place,
+    start: a.start.toISOString(),
+    end: a.end.toISOString(),
+    dayLabel: dayLabel(a.start, locale),
+    timeLabel: `${clockLabel(a.start, locale)} – ${clockLabel(a.end, locale)}`,
+    sharedMinutes: a.sharedMinutes,
+    missingMinutes: a.missingMinutes,
+    limitingName,
+    sentence: explainSentence(a, limitingName, place, locale),
+    compromises: a.compromises.map((c) => compromiseView(c, placeName, displayName, locale)),
+  };
+}
+
+/** « 75 » → « 1 h 15 » ; « 40 » → « 40 min ». */
+export function formatMinutesFr(minutes: number): string {
+  const total = Math.floor(minutes);
+  if (total < 60) return `${total} min`;
+  const h = Math.floor(total / 60);
+  const m = total % 60;
+  return m === 0 ? `${h} h` : `${h} h ${String(m).padStart(2, "0")}`;
+}

@@ -1,0 +1,62 @@
+import type { auth as fr } from "../fr/auth";
+
+export const auth: typeof fr = {
+  metaTitle: "Sign in · Common Free Time",
+  title: "Sign in",
+  description: "Sign in with your email and password.",
+  email: "Email address",
+  emailPlaceholder: "you@example.ca",
+  or: "or",
+  google: "Continue with Google",
+  password: "Password",
+  signIn: "Sign in",
+  noAccount: "No account yet?",
+  createAccount: "Create an account",
+  created: "Account created! You can sign in now.",
+  createdConfirm:
+    "Account created, but Supabase still asks for an email confirmation: the app's administrator must turn off “Confirm email” (see the README).",
+  errors: {
+    config: "Sign-in isn't configured yet (missing Supabase variables). See the README.",
+    lien: "Sign-in didn't go through. Please try again.",
+    courriel: "Invalid email address.",
+    limite: "Too many attempts in a short time. Try again in a few minutes.",
+    motdepasse: "Wrong email or password.",
+    essais: "Too many password attempts. Wait 15 minutes before trying again.",
+    confirmer: "This account isn't confirmed yet. Ask the app's administrator to confirm it.",
+    echec: "Sign-in didn't go through. Please try again.",
+    google: "Signing in with Google didn't work. Try again or use your email.",
+  },
+  signup: {
+    metaTitle: "Create an account · Common Free Time",
+    title: "Create an account",
+    description: "Pick a username and a password. No email to open.",
+    username: "Username",
+    usernameHint: "3 to 20 characters: lowercase letters, digits, “_” or “.”.",
+    password: "Password",
+    passwordHint:
+      "At least 8 characters, with an uppercase letter, a lowercase letter and a digit.",
+    confirm: "Confirm password",
+    submit: "Create my account",
+    haveAccount: "Already have an account?",
+    signIn: "Sign in",
+    rules: {
+      court: "at least 8 characters",
+      majuscule: "an uppercase letter",
+      minuscule: "a lowercase letter",
+      chiffre: "a digit",
+      pareil: "both passwords match",
+    },
+    errors: {
+      config: "Account creation isn't configured yet (missing Supabase variables). See the README.",
+      courriel: "Invalid email address.",
+      nom: "Invalid username: 3 to 20 characters, lowercase letters, digits, “_” or “.”, not starting with “_” or “.”.",
+      motdepasse:
+        "Password too weak: at least 8 characters, with an uppercase letter, a lowercase letter and a digit.",
+      confirmation: "The two passwords don't match.",
+      pris: "This username is already taken. Pick another one.",
+      existe: "An account already exists with this email. Sign in instead.",
+      limite: "Too many accounts created in a short time. Try again in an hour.",
+      echec: "Account creation didn't go through. Please try again.",
+    },
+  },
+};
