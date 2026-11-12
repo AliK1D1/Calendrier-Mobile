@@ -12,6 +12,7 @@ import { homePlans } from "@/lib/ux/homePlans";
 import { locale, t } from "@/services/i18n";
 import { useAuthed } from "@/services/session";
 import { getHomeProfile } from "@/services/home";
+import { programmerRappels } from "@/services/notifications";
 import { useLoad, useReloadOnFocus } from "@/services/use-load";
 import { space } from "@/theme/colors";
 import { strong, type } from "@/theme/tokens";
@@ -43,6 +44,7 @@ export default function Accueil() {
       loadPlans(supabase, userId, new Date(), { locale }),
     ]);
     if (!plans.ok) throw new Error(plans.error);
+    void programmerRappels(plans.views);
     return { profile, onboarded: profile.onboarded, plans: homePlans(plans.views) };
   }, userId, "accueil");
   // Retour sur l'accueil (bienvenue, un groupe, un autre onglet) : on relit les plans et l'état

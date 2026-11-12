@@ -7,6 +7,7 @@ import { Text, View } from "react-native";
 import { AppearanceCard } from "@/components/appearance-card";
 import { Avatar } from "@/components/avatar";
 import { ListGroup, ListRow } from "@/components/list";
+import { NotificationsCard } from "@/components/notifications-card";
 import { Stepper } from "@/components/steppers";
 import { Toggle } from "@/components/toggle";
 import { Button, Card, Chip, ErrorText, Field, Footnote, Heading, Label, Loading, Muted, Notice, Row, Screen, Section, Segmented } from "@/components/ui";
@@ -19,6 +20,7 @@ import { formatClock, formatClockFr, parseClock } from "@/lib/scheduling/weeklyB
 import { getMyOutingLimits, getMyPrivacy, getMyProfile, getMyQuietHours } from "@/lib/profile";
 import { t } from "@/services/i18n";
 import { useAuthed, useSession } from "@/services/session";
+import { oublierCeTelephone } from "@/services/notifications";
 import { SITE_URL } from "@/services/site";
 import { useLoad } from "@/services/use-load";
 import { space } from "@/theme/colors";
@@ -91,7 +93,7 @@ export default function Profil() {
       </Screen>
     );
   }
-  return <ProfileForms key={userId} data={data} email={session?.user.email ?? null} supabaseSignOut={() => supabase.auth.signOut()} />;
+  return <ProfileForms key={userId} data={data} email={session?.user.email ?? null} supabaseSignOut={() => oublierCeTelephone(supabase).then(() => supabase.auth.signOut())} />;
 }
 
 function ProfileForms({
@@ -220,6 +222,8 @@ function ProfileForms({
         </ListGroup>
         <Message msg={pv.msg} />
       </Section>
+
+      <NotificationsCard />
 
       <Section>
         <Heading>Apparence</Heading>

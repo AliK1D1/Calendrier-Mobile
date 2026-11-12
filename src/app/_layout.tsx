@@ -4,13 +4,16 @@ import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
 
 import { SessionProvider, useSession } from "@/services/session";
+import { useNotifications } from "@/services/use-notifications";
 import { headerOptions } from "@/theme/header-options";
 import { useNavTheme, usePalette, useScheme } from "@/theme/use-palette";
 
 void SplashScreen.preventAutoHideAsync();
 
 function RootStack() {
-  const { session } = useSession();
+  const { session, supabase } = useSession();
+  // Notifications : réinscription du téléphone et ouverture de l'écran quand on en touche une.
+  useNotifications(supabase, session?.user.id ?? null);
   // Thème clair ou sombre : celui de l'appareil (app.json : userInterfaceStyle « automatic »),
   // sauf si Profil > Apparence force « Clair » ou « Sombre ». Accent : choix de Profil > Apparence.
   const theme = useNavTheme();

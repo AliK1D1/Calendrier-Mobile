@@ -14,7 +14,9 @@ type Material = NonNullable<Names["android"]>;
 
 const MAP = {
   add: ["plus", "add"],
+  alarm: ["alarm.fill", "alarm"],
   alert: ["exclamationmark.triangle.fill", "warning"],
+  bell: ["bell.fill", "notifications"],
   calendar: ["calendar", "event"],
   call: ["phone.fill", "call"],
   check: ["checkmark", "check"],
