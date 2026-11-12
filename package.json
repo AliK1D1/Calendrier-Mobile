@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "main": "expo-router/entry",
   "dependencies": {
+    "@expo/material-symbols": "^0.1.1",
     "@expo/ui": "~58.0.28",
     "@supabase/supabase-js": "^2.119.0",
     "date-fns": "^4.4.0",
