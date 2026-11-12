@@ -136,13 +136,11 @@ export default function Horaire() {
   return (
     <>
       {native ? (
-        // Barre d'outils native : « + » pour ajouter un bloc, et un menu pour le reste.
+        // Barre d'outils native : « + » pour ajouter un bloc, Étude, et un menu pour le reste.
         <Stack.Toolbar placement="right">
           <Stack.Toolbar.Button icon={icons.add} accessibilityLabel={tb.newTitle} disabled={!data} onPress={addFirst} />
+          <Stack.Toolbar.Button icon={icons.study} accessibilityLabel="Étude" onPress={() => router.push("/etude")} />
           <Stack.Toolbar.Menu icon={icons.more} accessibilityLabel="Plus d'actions">
-            <Stack.Toolbar.MenuAction icon={icons.study} onPress={() => router.push("/etude")}>
-              Étude
-            </Stack.Toolbar.MenuAction>
             <Stack.Toolbar.MenuAction icon={icons.today} disabled={offset === 0} onPress={() => setOffset(0)}>
               Revenir à cette semaine
             </Stack.Toolbar.MenuAction>
@@ -162,7 +160,10 @@ export default function Horaire() {
           </View>
         </Row>
         {offset !== 0 ? <Button label="Revenir à cette semaine" variant="secondary" onPress={() => setOffset(0)} /> : null}
-        {native ? null : (
+        {native ? (
+          // Étude reste bien visible dans la page (et aussi dans la barre du haut).
+          <Button label="Étude : planifier mes séances" variant="secondary" onPress={() => router.push("/etude")} />
+        ) : (
           <Row>
             <View style={{ flex: 1 }}>
               <Button label={`+ ${tb.newTitle}`} disabled={!data} onPress={addFirst} />
