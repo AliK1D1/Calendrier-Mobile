@@ -1,6 +1,7 @@
 import { formatInTimeZone } from "date-fns-tz";
+import { router, useFocusEffect } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { Alert, Pressable, View } from "react-native";
 
 import { BlockSheet } from "@/components/block-sheet";
@@ -45,6 +46,14 @@ export default function Horaire() {
     ]);
     return { rows, places, homeId: profile?.home_place_id ?? null };
   }, userId);
+
+  // Retour de l'écran Étude (séances acceptées) : on relit l'horaire.
+  useFocusEffect(
+    useCallback(() => {
+      void reload();
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []),
+  );
 
   const today = formatInTimeZone(new Date(), TIME_ZONE, "yyyy-MM-dd");
   const days = data ? weekAgenda(data.rows, mondayOf(today, offset), today) : null;
@@ -110,7 +119,14 @@ export default function Horaire() {
           </View>
         </Row>
         {offset !== 0 ? <Button label="Revenir à cette semaine" variant="secondary" onPress={() => setOffset(0)} /> : null}
-        <Button label={`+ ${tb.newTitle}`} disabled={!data} onPress={() => newBlock(days?.[0]?.day ?? today)} />
+        <Row>
+          <View style={{ flex: 1 }}>
+            <Button label={`+ ${tb.newTitle}`} disabled={!data} onPress={() => newBlock(days?.[0]?.day ?? today)} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Button label="Étude" variant="secondary" onPress={() => router.push("/etude")} />
+          </View>
+        </Row>
         {flash ? <Body bold>{flash}</Body> : null}
         <ErrorText>{actionError}</ErrorText>
         <ErrorText>{error}</ErrorText>

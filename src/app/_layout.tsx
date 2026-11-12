@@ -37,6 +37,7 @@ function RootStack() {
           <Stack.Screen name="groupe/[id]" options={{ title: "Groupe" }} />
           <Stack.Screen name="lieux" options={{ title: "Mes lieux" }} />
           <Stack.Screen name="bienvenue" options={{ title: "Bienvenue !" }} />
+          <Stack.Screen name="etude" options={{ title: "Étude" }} />
         </Stack.Protected>
         <Stack.Protected guard={!signedIn}>
           <Stack.Screen name="connexion" options={{ headerShown: false }} />

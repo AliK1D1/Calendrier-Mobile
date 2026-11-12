@@ -5,18 +5,29 @@ Expo Router, TypeScript strict). Le site web (dépôt `AliK1D1/calendrier`, en l
 https://calendrier-opal.vercel.app) reste tel quel : l'app et le site partagent **la même base
 Supabase et les mêmes comptes**. Ce qu'on fait dans l'app se voit sur le site, et l'inverse.
 
-## Ce que l'app fait (étape 1)
+## Ce que l'app fait
 
 - Connexion et création de compte (courriel + mot de passe, mêmes règles que le site).
+- **Bienvenue** : maison, cégep ou école, mode de transport (3 questions).
 - **Accueil** : plans qui attendent ta réponse, tes prochains plans.
-- **Groupes** : mes groupes, créer un groupe, rejoindre avec un lien ou un code ; page d'un
-  groupe avec le lien d'invitation (bouton Partager), les plans à venir et les membres.
-- **Plans** : mêmes sections que le site ; accepter, refuser, annuler un plan.
-- **Horaire** : ma semaine en liste, jour par jour (semaine d'avant / d'après).
-- **Profil** : qui est connecté, déconnexion ; réglages sur le site pour l'instant.
+- **Groupes** : créer, rejoindre (lien ou code), partager le lien d'invitation ; dans un
+  groupe, **« Quand on peut se voir »** (même calcul que le site, compromis « Pourquoi
+  pas ? », appels) et **proposer un moment** (à partir d'une carte, ou libre, avec
+  répétition).
+- **Plans** : accepter, refuser, quitter ou arrêter une série, annuler.
+- **Horaire** : ma semaine en liste ; ajouter, modifier, supprimer un bloc ; « annulé cette
+  fois-ci » et rétablir.
+- **Étude** (depuis Horaire) : examens et travaux, « Planifier mon étude », accepter les
+  séances, replanifier les conflits, séance déplaçable ou retirée.
+- **Profil** : nom, transport, **mes lieux** (recherche d'adresse OpenStreetMap), heures où
+  je ne sors pas, limite de sorties, confidentialité, déconnexion.
 
-Pas encore dans l'app (le site s'ouvre pour ça) : modifier l'horaire, « Quand on peut se
-voir », lieux, étude, réglages du profil, connexion Google. Voir « Prochaines étapes ».
+Différence avec le site : dans l'app, les temps de trajet sont **estimés** d'après la
+distance (les clés des API de trajet restent sur le serveur du site).
+
+Encore sur le site seulement : import .ics et Omnivox, Outlook, calendriers abonnés,
+disponibilités ponctuelles, couleurs, langue, préférences d'étude, « Je suis libre
+maintenant », connexion Google.
 
 ## Lancer l'app sur ton téléphone
 
@@ -55,9 +66,6 @@ Seuls `src/lib/actions.ts` et `src/lib/README.md` sont propres au mobile.
 
 ## Prochaines étapes
 
-1. « Quand on peut se voir » dans la page d'un groupe (la logique est déjà copiée) et
-   « Proposer ce moment ».
-2. Modifier mon horaire (ajouter, déplacer, annuler un cours cette fois-ci).
-3. Lieux et profil (maison, transport, heures calmes), choix de la langue.
-4. Notifications (nouveau plan, rappel « quand partir »), connexion Google, liens
-   d'invitation qui ouvrent l'app.
+1. Notifications (nouveau plan, rappel « quand partir »).
+2. Liens d'invitation qui ouvrent l'app (`freecrew://rejoindre/<code>`), connexion Google.
+3. Vrais temps de trajet (petite route d'API sur le site), choix de la langue.
