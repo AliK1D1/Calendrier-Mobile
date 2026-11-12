@@ -15,7 +15,7 @@ export default function Plans() {
     const r = await loadPlans(supabase, userId, new Date(), { locale });
     if (!r.ok) throw new Error(r.error);
     return groupPlans(r.views);
-  }, userId);
+  }, userId, "plans");
 
   const section = (title: string, hint: string | null, list: PlanView[]) =>
     list.length === 0 ? null : (

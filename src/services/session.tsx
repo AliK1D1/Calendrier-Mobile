@@ -6,6 +6,7 @@ import type { Session, SupabaseClient } from "@supabase/supabase-js";
 import { createContext, type ReactNode, useContext, useEffect, useState } from "react";
 
 import { getSupabase } from "./supabase";
+import { clearLoadCache } from "./use-load";
 
 interface SessionState {
   /** `undefined` pendant la lecture de la session au démarrage. */
@@ -27,7 +28,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     void supabase.auth.getSession().then(({ data }) => {
       if (alive) setSession(data.session);
     });
-    const { data } = supabase.auth.onAuthStateChange((_event, next) => setSession(next));
+    const { data } = supabase.auth.onAuthStateChange((_event, next) => {
+      // Déconnexion : on oublie les données gardées en mémoire du compte précédent.
+      if (!next) clearLoadCache();
+      setSession(next);
+    });
     return () => {
       alive = false;
       data.subscription.unsubscribe();
