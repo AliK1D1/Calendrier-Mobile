@@ -33,16 +33,16 @@ maintenant », connexion Google.
 
 1. Installe Node 22 et, sur ton téléphone, l'app **Expo Go** (Play Store ou App Store).
 2. `npm install`
-3. Copie `.env.example` en `.env.local` et mets les **mêmes valeurs que
-   `NEXT_PUBLIC_SUPABASE_URL` et `NEXT_PUBLIC_SUPABASE_ANON_KEY` du site** (Vercel → Settings →
-   Environment Variables, ou Supabase → Project Settings → API). Jamais la clé `service_role`.
+3. Rien à configurer : l'URL Supabase et la clé publique sont dans `.env` (commité). Pour
+   utiliser d'autres valeurs, crée un `.env.local` (voir `.env.example`), qui a priorité.
+   Jamais la clé `service_role` dans ces fichiers.
 4. `npm start`, puis scanne le code QR avec Expo Go (Android) ou l'appareil photo (iPhone).
 
 ## Installer un vrai APK (Android)
 
 Avec un compte Expo gratuit : `npx eas-cli@latest build -p android --profile preview`. Le
-lien de l'APK arrive à la fin du build. Les variables `EXPO_PUBLIC_SUPABASE_*` doivent être
-ajoutées dans Expo (`eas env:create`) ou dans `eas.json`.
+lien de l'APK arrive à la fin du build. Les variables `EXPO_PUBLIC_SUPABASE_*` viennent du
+`.env` commité.
 
 ## Logique partagée avec le site
 
