@@ -45,7 +45,9 @@ describe("weekAgenda", () => {
 
   it("respecte le cours annulé cette fois-ci et la fin de session", () => {
     const skipped = weekAgenda([row({ id: "a", skip_days: ["2026-11-16"] })], "2026-11-16", "2026-11-16");
-    expect(skipped[0].items).toEqual([]);
+    expect(skipped[0].items.map((i) => i.skipped)).toEqual([true]);
+    const next = weekAgenda([row({ id: "a", skip_days: ["2026-11-16"] })], "2026-11-23", "2026-11-16");
+    expect(next[0].items.map((i) => i.skipped)).toEqual([false]);
     const after = weekAgenda([row({ id: "a" })], "2026-12-21", "2026-12-21");
     expect(after[0].items).toEqual([]);
   });
