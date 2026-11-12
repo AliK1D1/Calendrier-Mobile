@@ -20,7 +20,9 @@ Supabase et les mêmes comptes**. Ce qu'on fait dans l'app se voit sur le site, 
 - **Étude** (depuis Horaire) : examens et travaux, « Planifier mon étude », accepter les
   séances, replanifier les conflits, séance déplaçable ou retirée.
 - **Profil** : nom, transport, **mes lieux** (recherche d'adresse OpenStreetMap), heures où
-  je ne sors pas, limite de sorties, confidentialité, déconnexion.
+  je ne sors pas, limite de sorties, confidentialité, **notifications**, déconnexion.
+- **Notifications** (Profil) : notifications poussées quand on te propose un plan, quand on
+  répond au tien ou qu'un plan où tu vas est annulé ; rappel avant un plan (15 min à 2 h).
 
 Différence avec le site : dans l'app, les temps de trajet sont **estimés** d'après la
 distance (les clés des API de trajet restent sur le serveur du site).
@@ -44,6 +46,24 @@ Avec un compte Expo gratuit : `npx eas-cli@latest build -p android --profile pre
 lien de l'APK arrive à la fin du build. Les variables `EXPO_PUBLIC_SUPABASE_*` doivent être
 ajoutées dans Expo (`eas env:create`) ou dans `eas.json`.
 
+## Notifications
+
+- **Poussées** : envoyées par la base de données Supabase (migration 0023 du site,
+  `supabase/migration-0023.sql`), que l'action vienne du site ou de l'app. Le téléphone
+  s'inscrit avec son jeton Expo (`register_push_token`) quand on active « Notifications des
+  plans », se réinscrit à chaque ouverture et se retire à la déconnexion.
+- **Rappels** : notifications locales programmées sur le téléphone, recalculées à chaque
+  chargement de l'accueil ou des plans (`src/features/notifications.ts`, testé).
+- Toucher une notification ouvre l'onglet Plans.
+- Limites : **Expo Go sur Android ne reçoit pas de notifications poussées** (depuis le SDK 53) :
+  il faut un APK (`--profile preview`) ou une version de développement. Les rappels marchent
+  dans Expo Go. Sur iPhone, il faut un compte Apple Developer payant pour les notifications
+  poussées.
+- Configuration (une fois) : `extra.eas.projectId` dans `app.json` (`npx eas-cli@latest init`),
+  `google-services.json` de Firebase à la racine (ou variable fichier `GOOGLE_SERVICES_JSON`,
+  lue par `app.config.js`), clé de compte de service FCM V1 et clé APNs dans Expo
+  (`npx eas-cli@latest credentials`).
+
 ## Logique partagée avec le site
 
 `src/lib/` est une **copie** du `src/lib/` du site : mêmes fonctions pures d'horaire
@@ -66,6 +86,6 @@ Seuls `src/lib/actions.ts` et `src/lib/README.md` sont propres au mobile.
 
 ## Prochaines étapes
 
-1. Notifications (nouveau plan, rappel « quand partir »).
+1. Rappel « quand partir » avec le vrai trajet (demande une route d'API sur le site).
 2. Liens d'invitation qui ouvrent l'app (`freecrew://rejoindre/<code>`), connexion Google.
 3. Vrais temps de trajet (petite route d'API sur le site), choix de la langue.

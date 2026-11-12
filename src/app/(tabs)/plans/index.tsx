@@ -7,6 +7,7 @@ import { Button, EmptyState, ErrorText, Heading, Loading, Muted, Screen, Section
 import { loadPlans } from "@/lib/plans/queries";
 import { groupPlans, type PlanView } from "@/lib/plans/view";
 import { locale, t } from "@/services/i18n";
+import { programmerRappels } from "@/services/notifications";
 import { useAuthed } from "@/services/session";
 import { useLoad } from "@/services/use-load";
 
@@ -22,6 +23,7 @@ export default function Plans() {
   const { data, error, refreshing, refresh, reload } = useLoad(async () => {
     const r = await loadPlans(supabase, userId, new Date(), { locale });
     if (!r.ok) throw new Error(r.error);
+    void programmerRappels(r.views);
     return groupPlans(r.views);
   }, userId, "plans");
 
