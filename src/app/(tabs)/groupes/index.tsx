@@ -17,7 +17,7 @@ const tg = t.groups;
 export default function Groupes() {
   const { supabase, userId } = useAuthed();
   const c = usePalette();
-  const { data, error, refreshing, refresh } = useLoad(() => getMyGroups(supabase, userId), userId);
+  const { data, error, refreshing, refresh } = useLoad(() => getMyGroups(supabase, userId), userId, "groupes");
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState<"create" | "join" | null>(null);

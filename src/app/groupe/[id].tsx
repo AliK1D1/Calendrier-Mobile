@@ -33,7 +33,7 @@ export default function Groupe() {
     ]);
     if (!plans.ok) throw new Error(plans.error);
     return { group, plans: plans.views.filter((p) => p.state === "upcoming") };
-  }, `${userId}:${id}`);
+  }, `${userId}:${id}`, "groupe");
 
   const group = data?.group;
   const link = group ? inviteUrl(SITE_URL, group.inviteCode) : null;

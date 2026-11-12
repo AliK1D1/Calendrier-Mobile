@@ -1,7 +1,7 @@
 import { formatInTimeZone } from "date-fns-tz";
-import { router, Stack, useFocusEffect } from "expo-router";
+import { router, Stack } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
-import { useCallback, useState } from "react";
+import { useState } from "react";
 import { ActionSheetIOS, Alert, Platform, Pressable, View } from "react-native";
 
 import { BlockSheet } from "@/components/block-sheet";
@@ -16,7 +16,7 @@ import { TIME_ZONE } from "@/lib/scheduling/time";
 import { t } from "@/services/i18n";
 import { useAuthed } from "@/services/session";
 import { SITE_URL } from "@/services/site";
-import { useLoad } from "@/services/use-load";
+import { useLoad, useReloadOnFocus } from "@/services/use-load";
 import { space } from "@/theme/colors";
 import { usePalette } from "@/theme/use-palette";
 
@@ -39,22 +39,18 @@ export default function Horaire() {
   const [draft, setDraft] = useState<BlockDraft | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const { data, error, refreshing, refresh, reload } = useLoad(async () => {
+  const { data, error, refreshing, refresh, reload, age } = useLoad(async () => {
     const [rows, places, profile] = await Promise.all([
       getMyBusyBlocks(supabase, userId),
       getMyPlaces(supabase, userId),
       getMyProfile(supabase, userId),
     ]);
     return { rows, places, homeId: profile?.home_place_id ?? null };
-  }, userId);
+  }, userId, "horaire");
 
-  // Retour de l'écran Étude (séances acceptées) : on relit l'horaire.
-  useFocusEffect(
-    useCallback(() => {
-      void reload();
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []),
-  );
+  // Retour de l'écran Étude (séances acceptées) : on relit l'horaire, mais pas à la première
+  // ouverture (le chargement initial vient de partir).
+  useReloadOnFocus(reload, age, 2_000);
 
   const today = formatInTimeZone(new Date(), TIME_ZONE, "yyyy-MM-dd");
   const days = data ? weekAgenda(data.rows, mondayOf(today, offset), today) : null;
@@ -136,13 +132,11 @@ export default function Horaire() {
   return (
     <>
       {native ? (
-        // Barre d'outils native : « + » pour ajouter un bloc, et un menu pour le reste.
+        // Barre d'outils native : « + » pour ajouter un bloc, Étude, et un menu pour le reste.
         <Stack.Toolbar placement="right">
           <Stack.Toolbar.Button icon={icons.add} accessibilityLabel={tb.newTitle} disabled={!data} onPress={addFirst} />
+          <Stack.Toolbar.Button icon={icons.study} accessibilityLabel="Étude" onPress={() => router.push("/etude")} />
           <Stack.Toolbar.Menu icon={icons.more} accessibilityLabel="Plus d'actions">
-            <Stack.Toolbar.MenuAction icon={icons.study} onPress={() => router.push("/etude")}>
-              Étude
-            </Stack.Toolbar.MenuAction>
             <Stack.Toolbar.MenuAction icon={icons.today} disabled={offset === 0} onPress={() => setOffset(0)}>
               Revenir à cette semaine
             </Stack.Toolbar.MenuAction>
@@ -162,7 +156,10 @@ export default function Horaire() {
           </View>
         </Row>
         {offset !== 0 ? <Button label="Revenir à cette semaine" variant="secondary" onPress={() => setOffset(0)} /> : null}
-        {native ? null : (
+        {native ? (
+          // Étude reste bien visible dans la page (et aussi dans la barre du haut).
+          <Button label="Étude : planifier mes séances" variant="secondary" onPress={() => router.push("/etude")} />
+        ) : (
           <Row>
             <View style={{ flex: 1 }}>
               <Button label={`+ ${tb.newTitle}`} disabled={!data} onPress={addFirst} />
