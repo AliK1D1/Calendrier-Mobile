@@ -5,15 +5,17 @@ import { useEffect } from "react";
 
 import { SessionProvider, useSession } from "@/services/session";
 import { headerOptions } from "@/theme/header-options";
-import { useNavTheme, usePalette } from "@/theme/use-palette";
+import { useNavTheme, usePalette, useScheme } from "@/theme/use-palette";
 
 void SplashScreen.preventAutoHideAsync();
 
 function RootStack() {
   const { session } = useSession();
-  // Thème clair ou sombre : toujours celui de l'appareil (app.json : userInterfaceStyle « automatic »).
+  // Thème clair ou sombre : celui de l'appareil (app.json : userInterfaceStyle « automatic »),
+  // sauf si Profil > Apparence force « Clair » ou « Sombre ». Accent : choix de Profil > Apparence.
   const theme = useNavTheme();
   const c = usePalette();
+  const scheme = useScheme();
 
   useEffect(() => {
     if (session !== undefined) void SplashScreen.hideAsync();
@@ -25,7 +27,7 @@ function RootStack() {
 
   return (
     <ThemeProvider value={theme}>
-      <StatusBar style="auto" />
+      <StatusBar style={scheme === "dark" ? "light" : "dark"} />
       <Stack screenOptions={headerOptions(c)}>
         <Stack.Protected guard={signedIn}>
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />

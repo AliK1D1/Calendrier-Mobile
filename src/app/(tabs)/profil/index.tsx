@@ -4,6 +4,7 @@ import * as WebBrowser from "expo-web-browser";
 import { useState } from "react";
 import { View } from "react-native";
 
+import { AppearanceCard } from "@/components/appearance-card";
 import { Toggle } from "@/components/toggle";
 
 import { Body, Button, Card, Chip, ErrorText, Field, Heading, Label, Loading, Muted, Row, Screen } from "@/components/ui";
@@ -181,9 +182,12 @@ function ProfileForms({
         <Button label={pv.busy ? "Enregistrement…" : "Enregistrer"} variant="secondary" busy={pv.busy} disabled={pv.busy} onPress={() => void pv.run(savePrivacy(supabase, userId, hide), "Réglage enregistré.")} />
       </Card>
 
+      <Heading>Apparence</Heading>
+      <AppearanceCard />
+
       <Card>
         <Body bold>Sur le site seulement</Body>
-        <Muted>Couleurs, langue, Outlook, calendriers abonnés et préférences d&apos;étude se règlent sur le site. Ils s&apos;appliquent aussi à l&apos;app.</Muted>
+        <Muted>Langue, Outlook, calendriers abonnés et préférences d&apos;étude se règlent sur le site. Ils s&apos;appliquent aussi à l&apos;app.</Muted>
         <Button label="Ouvrir mon profil sur le site" variant="secondary" onPress={() => void WebBrowser.openBrowserAsync(`${SITE_URL}/profil`)} />
       </Card>
 
