@@ -3,10 +3,11 @@
  * le site (validateBlockForm) ; heures par pas de 15 min, dates par semaine.
  */
 import { useState } from "react";
-import { Alert, Modal, ScrollView, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { Alert, ScrollView, View } from "react-native";
 
-import { Body, Button, Chip, ErrorText, Field, Heading, Label, Muted, Row } from "@/components/ui";
+import { Sheet } from "@/components/sheet";
+import { CLOCK_STEPS, Stepper } from "@/components/steppers";
+import { Button, Chip, ErrorText, Field, Footnote, Label, Row, Segmented } from "@/components/ui";
 import { addBlocks, type BlockDraft, deleteBlock, shiftClock, shiftWeeks, updateBlock } from "@/features/blocks";
 import { nextDays } from "@/features/propose";
 import { dayLabelFr } from "@/features/agenda";
@@ -14,41 +15,11 @@ import { formatClockFr, parseClock, WEEKDAY_SHORT, WEEKDAYS, type Weekday } from
 import { t } from "@/services/i18n";
 import { useAuthed } from "@/services/session";
 import { space } from "@/theme/colors";
-import { usePalette } from "@/theme/use-palette";
 
 const tb = t.schedule.block;
 
-function Stepper({ label, value, onShift }: { label: string; value: string; onShift: (minutes: number) => void }) {
-  return (
-    <View style={{ gap: space.xs }}>
-      <Label>{label}</Label>
-      <Row>
-        <Button label="− 1 h" variant="secondary" onPress={() => onShift(-60)} />
-        <Button label="− 15" variant="secondary" onPress={() => onShift(-15)} />
-        <View style={{ minWidth: 76, alignItems: "center" }}>
-          <Body bold>{formatClockFr(parseClock(value) ?? 0)}</Body>
-        </View>
-        <Button label="+ 15" variant="secondary" onPress={() => onShift(15)} />
-        <Button label="+ 1 h" variant="secondary" onPress={() => onShift(60)} />
-      </Row>
-    </View>
-  );
-}
-
-function DateStepper({ label, value, onChange }: { label: string; value: string; onChange: (day: string) => void }) {
-  return (
-    <View style={{ gap: space.xs }}>
-      <Label>{label}</Label>
-      <Row>
-        <Button label="− 1 sem." variant="secondary" onPress={() => onChange(shiftWeeks(value, -1))} />
-        <View style={{ flex: 1, alignItems: "center" }}>
-          <Body bold>{dayLabelFr(value)}</Body>
-        </View>
-        <Button label="+ 1 sem." variant="secondary" onPress={() => onChange(shiftWeeks(value, 1))} />
-      </Row>
-    </View>
-  );
-}
+/** Début et fin de session : par semaine. */
+const WEEK_STEPS = [{ label: "1 sem.", by: 1 }] as const;
 
 export function BlockSheet({
   draft,
@@ -67,7 +38,6 @@ export function BlockSheet({
   onSaved: (message: string) => void;
 }) {
   const { supabase, userId } = useAuthed();
-  const c = usePalette();
   const [d, setD] = useState<BlockDraft>(draft);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -114,64 +84,72 @@ export function BlockSheet({
   const kinds = d.kind === "custom" ? (["weekly", "once", "custom"] as const) : (["weekly", "once"] as const);
 
   return (
-    <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-      <SafeAreaView style={{ flex: 1, backgroundColor: c.background }}>
-        <ScrollView contentContainerStyle={{ padding: space.lg, gap: space.md }} keyboardShouldPersistTaps="handled">
-          <Heading>{editing ? tb.editTitle : tb.newTitle}</Heading>
-          <Field label={tb.title} placeholder={tb.titlePlaceholder} value={d.title} onChangeText={(v) => set({ title: v })} maxLength={100} />
+    <Sheet
+      title={editing ? tb.editTitle : tb.newTitle}
+      confirmLabel="Enregistrer"
+      busy={busy}
+      onConfirm={() => void save()}
+      onClose={onClose}
+    >
+      <ErrorText>{error}</ErrorText>
+      <Field label={tb.title} placeholder={tb.titlePlaceholder} value={d.title} onChangeText={(v) => set({ title: v })} maxLength={100} />
 
-          <Label>{tb.place}</Label>
-          <Row>
-            <Chip label={homeName ? tb.homeNamed(homeName) : tb.home} selected={d.placeId === null} onPress={() => set({ placeId: null })} />
-            {places.map((p) => (
-              <Chip key={p.id} label={p.name} selected={d.placeId === p.id} onPress={() => set({ placeId: p.id })} />
+      <View style={{ gap: space.sm }}>
+        <Label>{tb.place}</Label>
+        <Row>
+          <Chip label={homeName ? tb.homeNamed(homeName) : tb.home} selected={d.placeId === null} onPress={() => set({ placeId: null })} />
+          {places.map((p) => (
+            <Chip key={p.id} label={p.name} selected={d.placeId === p.id} onPress={() => set({ placeId: p.id })} />
+          ))}
+        </Row>
+      </View>
+
+      <Stepper label={tb.start} value={formatClockFr(parseClock(d.start) ?? 0)} steps={CLOCK_STEPS} onShift={(m) => set({ start: shiftClock(d.start, m, 0, 24 * 60 - 15) })} />
+      <Stepper label={tb.end} value={formatClockFr(parseClock(d.end) ?? 0)} steps={CLOCK_STEPS} onShift={(m) => set({ end: shiftClock(d.end, m, 15, 24 * 60) })} />
+
+      <View style={{ gap: space.sm }}>
+        <Label>{tb.repeat}</Label>
+        <Segmented
+          accessibilityLabel={tb.repeat}
+          options={kinds.map((k) => ({ value: k, label: tb.kinds[k] }))}
+          value={d.kind}
+          onChange={(k) => set({ kind: k })}
+        />
+        {d.kind === "custom" ? (
+          <Footnote>Cette répétition personnalisée se modifie sur le site. Ici, tu peux changer le titre, le lieu et les heures.</Footnote>
+        ) : null}
+      </View>
+
+      {d.kind === "once" ? (
+        <View style={{ gap: space.sm }}>
+          <Label>{tb.day}</Label>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: space.sm }}>
+            {days.map((x) => (
+              <Chip key={x.day} label={x.label} selected={d.date === x.day} onPress={() => set({ date: x.day })} />
             ))}
-          </Row>
+          </ScrollView>
+        </View>
+      ) : null}
 
-          <Stepper label={tb.start} value={d.start} onShift={(m) => set({ start: shiftClock(d.start, m, 0, 24 * 60 - 15) })} />
-          <Stepper label={tb.end} value={d.end} onShift={(m) => set({ end: shiftClock(d.end, m, 15, 24 * 60) })} />
+      {d.kind === "weekly" ? (
+        <>
+          <View style={{ gap: space.sm }}>
+            <Label>{editing ? tb.days : tb.daysAll}</Label>
+            <Row>
+              {WEEKDAYS.map((w) => (
+                <Chip key={w} label={WEEKDAY_SHORT[w]} selected={d.weekdays.includes(w)} onPress={() => toggleDay(w)} />
+              ))}
+            </Row>
+          </View>
+          <Stepper label={tb.sessionStart} value={dayLabelFr(d.sessionStart)} steps={WEEK_STEPS} onShift={(n) => set({ sessionStart: shiftWeeks(d.sessionStart, n) })} />
+          <View style={{ gap: space.sm }}>
+            <Stepper label={tb.sessionEnd} value={dayLabelFr(d.sessionEnd)} steps={WEEK_STEPS} onShift={(n) => set({ sessionEnd: shiftWeeks(d.sessionEnd, n) })} />
+            <Footnote>{tb.sessionHint}</Footnote>
+          </View>
+        </>
+      ) : null}
 
-          <Label>{tb.repeat}</Label>
-          <Row>
-            {kinds.map((k) => (
-              <Chip key={k} label={tb.kinds[k]} selected={d.kind === k} onPress={() => set({ kind: k })} />
-            ))}
-          </Row>
-          {d.kind === "custom" ? (
-            <Muted>Cette répétition personnalisée se modifie sur le site. Ici, tu peux changer le titre, le lieu et les heures.</Muted>
-          ) : null}
-
-          {d.kind === "once" ? (
-            <>
-              <Label>{tb.day}</Label>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: space.sm }}>
-                {days.map((x) => (
-                  <Chip key={x.day} label={x.label} selected={d.date === x.day} onPress={() => set({ date: x.day })} />
-                ))}
-              </ScrollView>
-            </>
-          ) : null}
-
-          {d.kind === "weekly" ? (
-            <>
-              <Label>{editing ? tb.days : tb.daysAll}</Label>
-              <Row>
-                {WEEKDAYS.map((w) => (
-                  <Chip key={w} label={WEEKDAY_SHORT[w]} selected={d.weekdays.includes(w)} onPress={() => toggleDay(w)} />
-                ))}
-              </Row>
-              <DateStepper label={tb.sessionStart} value={d.sessionStart} onChange={(v) => set({ sessionStart: v })} />
-              <DateStepper label={tb.sessionEnd} value={d.sessionEnd} onChange={(v) => set({ sessionEnd: v })} />
-              <Muted>{tb.sessionHint}</Muted>
-            </>
-          ) : null}
-
-          <ErrorText>{error}</ErrorText>
-          <Button label="Enregistrer" busy={busy} disabled={busy} onPress={() => void save()} />
-          {editing ? <Button label="Supprimer le bloc" variant="danger" disabled={busy} onPress={remove} /> : null}
-          <Button label="Annuler" variant="secondary" disabled={busy} onPress={onClose} />
-        </ScrollView>
-      </SafeAreaView>
-    </Modal>
+      {editing ? <Button icon="trash" label="Supprimer le bloc" variant="danger" disabled={busy} onPress={remove} /> : null}
+    </Sheet>
   );
 }

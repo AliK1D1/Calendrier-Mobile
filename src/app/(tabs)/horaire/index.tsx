@@ -2,23 +2,26 @@ import { formatInTimeZone } from "date-fns-tz";
 import { router, Stack } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
 import { useState } from "react";
-import { ActionSheetIOS, Alert, Platform, Pressable, View } from "react-native";
+import { ActionSheetIOS, Alert, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { BlockSheet } from "@/components/block-sheet";
 import { icons } from "@/components/icons";
-import { Badge, Body, Button, Card, ErrorText, Loading, Muted, Row, Screen } from "@/components/ui";
+import { ListGroup, ListRow } from "@/components/list";
+import { Badge, Button, EmptyState, ErrorText, Heading, IconButton, Loading, Notice, Screen, Section } from "@/components/ui";
+import { defaultDay, weekRangeLabel } from "@/features/display";
 import { couleurJour, jourDeSemaine } from "@/features/apparence";
 import { type AgendaItem, dayLabelFr, mondayOf, weekAgenda } from "@/features/agenda";
 import { type BlockDraft, editBlockDraft, isEditableSource, newBlockDraft, setOccurrence } from "@/features/blocks";
 import { toBlockSpec } from "@/lib/db/convert";
 import { getMyBusyBlocks, getMyPlaces, getMyProfile } from "@/lib/profile";
-import { isRecurring, suggestSession } from "@/lib/scheduling/weeklyBlocks";
+import { formatClockFr, isRecurring, suggestSession, WEEKDAY_SHORT, weekdayOf } from "@/lib/scheduling/weeklyBlocks";
 import { TIME_ZONE } from "@/lib/scheduling/time";
 import { t } from "@/services/i18n";
 import { useAuthed } from "@/services/session";
 import { SITE_URL } from "@/services/site";
 import { useLoad, useReloadOnFocus } from "@/services/use-load";
 import { space } from "@/theme/colors";
+import { ANDROID, shape, strong, type } from "@/theme/tokens";
 import { usePalette, useScheme } from "@/theme/use-palette";
 
 const tb = t.schedule.block;
@@ -32,12 +35,17 @@ const SOURCE_LABEL: Record<string, string> = {
   subscription: "Calendrier abonné",
 };
 
-/** Mon horaire, une semaine à la fois : ajouter, modifier, supprimer, annuler une fois. */
+/**
+ * Mon horaire, une semaine à la fois : une bande des 7 jours (un point de couleur les jours
+ * occupés), puis le détail du jour choisi. Ajouter, modifier, supprimer, annuler une fois.
+ */
 export default function Horaire() {
   const { supabase, userId } = useAuthed();
   const c = usePalette();
   const scheme = useScheme();
   const [offset, setOffset] = useState(0);
+  // Jour choisi dans la bande ; `null` = aujourd'hui (ou le lundi d'une autre semaine).
+  const [picked, setPicked] = useState<string | null>(null);
   const [draft, setDraft] = useState<BlockDraft | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -56,7 +64,9 @@ export default function Horaire() {
 
   const today = formatInTimeZone(new Date(), TIME_ZONE, "yyyy-MM-dd");
   const days = data ? weekAgenda(data.rows, mondayOf(today, offset), today) : null;
-  const total = days?.reduce((n, d) => n + d.items.length, 0) ?? 0;
+  const monday = mondayOf(today, offset);
+  const selected = days ? (days.find((d) => d.day === picked)?.day ?? defaultDay(days.map((d) => d.day), today)) : today;
+  const shown = days?.find((d) => d.day === selected) ?? null;
   const homeName = data?.places.find((p) => p.id === data.homeId)?.name ?? null;
   // La maison est « nulle » dans un bloc : on ne la propose pas deux fois.
   const otherPlaces = data ? data.places.filter((p) => p.id !== data.homeId) : [];
@@ -128,18 +138,23 @@ export default function Horaire() {
   }
 
   const native = Platform.OS !== "web";
-  const addFirst = () => newBlock(days?.[0]?.day ?? today);
+  const addHere = () => newBlock(selected);
   const openSite = () => void WebBrowser.openBrowserAsync(`${SITE_URL}/horaire`);
+  const goWeek = (next: number) => {
+    setOffset(next);
+    setPicked(null);
+  };
+  const shownLabel = shown ? shown.label.charAt(0).toUpperCase() + shown.label.slice(1) : "";
 
   return (
     <>
       {native ? (
         // Barre d'outils native : « + » pour ajouter un bloc, Étude, et un menu pour le reste.
         <Stack.Toolbar placement="right">
-          <Stack.Toolbar.Button icon={icons.add} accessibilityLabel={tb.newTitle} disabled={!data} onPress={addFirst} />
+          <Stack.Toolbar.Button icon={icons.add} accessibilityLabel={tb.newTitle} disabled={!data} onPress={addHere} />
           <Stack.Toolbar.Button icon={icons.study} accessibilityLabel="Étude" onPress={() => router.push("/etude")} />
           <Stack.Toolbar.Menu icon={icons.more} accessibilityLabel="Plus d'actions">
-            <Stack.Toolbar.MenuAction icon={icons.today} disabled={offset === 0} onPress={() => setOffset(0)}>
+            <Stack.Toolbar.MenuAction icon={icons.today} disabled={offset === 0} onPress={() => goWeek(0)}>
               Revenir à cette semaine
             </Stack.Toolbar.MenuAction>
             <Stack.Toolbar.MenuAction icon={icons.web} onPress={openSite}>
@@ -149,75 +164,122 @@ export default function Horaire() {
         </Stack.Toolbar>
       ) : null}
       <Screen title={t.schedule.title} refreshing={refreshing} onRefresh={refresh}>
-        <Row>
-          <View style={{ flex: 1 }}>
-            <Button label="‹ Semaine d'avant" variant="secondary" onPress={() => setOffset((o) => o - 1)} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Button label="Semaine d'après ›" variant="secondary" onPress={() => setOffset((o) => o + 1)} />
-          </View>
-        </Row>
-        {offset !== 0 ? <Button label="Revenir à cette semaine" variant="secondary" onPress={() => setOffset(0)} /> : null}
-        {native ? (
-          // Étude reste bien visible dans la page (et aussi dans la barre du haut).
-          <Button label="Étude : planifier mes séances" variant="secondary" onPress={() => router.push("/etude")} />
-        ) : (
-          <Row>
-            <View style={{ flex: 1 }}>
-              <Button label={`+ ${tb.newTitle}`} disabled={!data} onPress={addFirst} />
+        <View style={[styles.week, { backgroundColor: c.card }]}>
+          <View style={styles.weekBar}>
+            <IconButton icon="chevronLeft" label="Semaine d'avant" onPress={() => goWeek(offset - 1)} />
+            <View style={styles.weekTitle}>
+              <Text accessibilityRole="header" style={[type.headline, { color: c.text }]}>
+                {offset === 0 ? "Cette semaine" : weekRangeLabel(monday)}
+              </Text>
+              {offset === 0 ? (
+                <Text style={[type.footnote, { color: c.muted }]}>{weekRangeLabel(monday)}</Text>
+              ) : (
+                <Pressable accessibilityRole="button" hitSlop={10} onPress={() => goWeek(0)}>
+                  <Text style={[type.footnote, strong, { color: c.primary }]}>Revenir à cette semaine</Text>
+                </Pressable>
+              )}
             </View>
-            <View style={{ flex: 1 }}>
-              <Button label="Étude" variant="secondary" onPress={() => router.push("/etude")} />
-            </View>
-          </Row>
-        )}
-        {flash ? <Body bold>{flash}</Body> : null}
+            <IconButton icon="chevron" label="Semaine d'après" onPress={() => goWeek(offset + 1)} />
+          </View>
+          <View accessibilityRole="tablist" style={styles.strip}>
+            {(days ?? []).map((d) => {
+              const on = d.day === selected;
+              const count = d.items.filter((i) => !i.skipped).length;
+              return (
+                <Pressable
+                  key={d.day}
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected: on }}
+                  accessibilityLabel={`${d.label}${d.isToday ? ", aujourd'hui" : ""}, ${count === 0 ? "libre" : `${count} bloc${count > 1 ? "s" : ""}`}`}
+                  onPress={() => setPicked(d.day)}
+                  android_ripple={{ color: c.border, borderless: true, radius: 28 }}
+                  style={({ pressed }) => [styles.day, { opacity: pressed && !ANDROID ? 0.5 : 1 }]}
+                >
+                  <Text allowFontScaling={false} style={[type.caption, { color: d.isToday ? c.primary : c.muted }, d.isToday ? strong : null]}>
+                    {WEEKDAY_SHORT[weekdayOf(d.day)].slice(0, 3)}
+                  </Text>
+                  <View style={[styles.dayNumber, on ? { backgroundColor: c.primary } : null]}>
+                    <Text
+                      allowFontScaling={false}
+                      style={[type.headline, { color: on ? c.primaryText : d.isToday ? c.primary : c.text }]}
+                    >
+                      {Number(d.day.slice(8))}
+                    </Text>
+                  </View>
+                  {/* Couleur propre à chaque jour, comme la grille de l'horaire du site. */}
+                  <View style={[styles.dot, { backgroundColor: count > 0 ? couleurJour(jourDeSemaine(d.day), scheme) : "transparent" }]} />
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+
+        <Notice>{flash}</Notice>
         <ErrorText>{actionError}</ErrorText>
         <ErrorText>{error}</ErrorText>
         {!days && !error ? <Loading /> : null}
-        {days && total === 0 ? <Muted>Rien à ton horaire cette semaine.</Muted> : null}
-        {days?.map((d) => (
-          <Card key={d.day} style={d.isToday ? { borderColor: c.primary, borderWidth: 2 } : undefined}>
-            <Row>
-              {/* Couleur propre à chaque jour, comme la grille de l'horaire du site. */}
-              <View
-                accessibilityElementsHidden
-                importantForAccessibility="no"
-                style={{ width: 12, height: 12, borderRadius: 6, alignSelf: "center", backgroundColor: couleurJour(jourDeSemaine(d.day), scheme) }}
+
+        {shown ? (
+          <Section>
+            <Heading action={{ label: "Ajouter", onPress: addHere }}>{shownLabel}</Heading>
+            {shown.items.length === 0 ? (
+              <EmptyState
+                icon="calendar"
+                title="Libre toute la journée"
+                text={shown.isToday ? "Rien à ton horaire aujourd'hui." : "Rien à ton horaire ce jour-là."}
+                action={{ label: tb.newTitle, icon: "add", onPress: addHere }}
               />
-              <Body bold>{d.label.charAt(0).toUpperCase() + d.label.slice(1)}</Body>
-              {d.isToday ? <Badge>Aujourd&apos;hui</Badge> : null}
-            </Row>
-            {d.items.length === 0 ? <Muted>Libre toute la journée</Muted> : null}
-            {d.items.map((i) => (
-              <Pressable
-                key={i.id}
-                accessibilityRole="button"
-                accessibilityHint="Modifier ou annuler cette fois-ci"
-                onPress={() => onItem(i, d.day)}
-                style={({ pressed }) => ({
-                  flexDirection: "row",
-                  gap: space.md,
-                  alignItems: "baseline",
-                  minHeight: 44,
-                  paddingVertical: space.xs,
-                  opacity: pressed ? 0.6 : i.skipped ? 0.55 : 1,
+            ) : (
+              <View style={[styles.agenda, { backgroundColor: c.card }]}>
+                {shown.items.map((i, index) => {
+                  const bar =
+                    i.source === "meetup" ? c.primary : i.source === "study" ? c.success : couleurJour(jourDeSemaine(shown.day), scheme);
+                  return (
+                    <Pressable
+                      key={i.id}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${i.title}, ${i.timeLabel}${i.skipped ? ", annulé cette fois-ci" : ""}`}
+                      accessibilityHint="Modifier ou annuler cette fois-ci"
+                      onPress={() => onItem(i, shown.day)}
+                      android_ripple={{ color: c.border }}
+                      style={({ pressed }) => [
+                        styles.item,
+                        index > 0 ? { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: c.border } : null,
+                        { opacity: pressed && !ANDROID ? 0.5 : 1 },
+                      ]}
+                    >
+                      <View style={styles.times}>
+                        <Text style={[type.subhead, strong, styles.clock, { color: i.skipped ? c.muted : c.text }]}>
+                          {formatClockFr(i.block.startMinute)}
+                        </Text>
+                        <Text style={[type.footnote, styles.clock, { color: c.muted }]}>{formatClockFr(i.block.endMinute)}</Text>
+                      </View>
+                      <View style={[styles.bar, { backgroundColor: bar, opacity: i.skipped ? 0.35 : 1 }]} />
+                      <View style={styles.itemText}>
+                        <Text
+                          style={[type.headline, { color: i.skipped ? c.muted : c.text }, i.skipped ? { textDecorationLine: "line-through" } : null]}
+                        >
+                          {i.title}
+                        </Text>
+                        {i.skipped ? (
+                          <Text style={[type.footnote, { color: c.muted }]}>Annulé cette fois-ci</Text>
+                        ) : i.source && SOURCE_LABEL[i.source] ? (
+                          <Badge>{SOURCE_LABEL[i.source]}</Badge>
+                        ) : null}
+                      </View>
+                    </Pressable>
+                  );
                 })}
-              >
-                <Muted>{i.timeLabel}</Muted>
-                <View style={{ flex: 1 }}>
-                  <Body>{i.skipped ? `${i.title} (annulé cette fois-ci)` : i.title}</Body>
-                  {i.source && SOURCE_LABEL[i.source] ? <Muted>{SOURCE_LABEL[i.source]}</Muted> : null}
-                </View>
-              </Pressable>
-            ))}
-            <Pressable accessibilityRole="button" onPress={() => newBlock(d.day)} style={{ minHeight: 44, justifyContent: "center" }}>
-              <Muted>+ Ajouter ce jour-là</Muted>
-            </Pressable>
-          </Card>
-        ))}
-        <Muted>Importer un .ics, les calendriers abonnés et les disponibilités ponctuelles se gèrent sur le site.</Muted>
-        <Button label="Ouvrir l'horaire sur le site" variant="secondary" onPress={openSite} />
+              </View>
+            )}
+          </Section>
+        ) : null}
+
+        <ListGroup footer="Importer un .ics, les calendriers abonnés et les disponibilités ponctuelles se gèrent sur le site.">
+          <ListRow icon="study" iconColor={c.success} title="Étude" subtitle="Planifier mes séances avant un examen" onPress={() => router.push("/etude")} />
+          <ListRow icon="external" title="Ouvrir l'horaire sur le site" onPress={openSite} chevron={false} />
+        </ListGroup>
+        {!native ? <Button label={`+ ${tb.newTitle}`} disabled={!data} onPress={addHere} /> : null}
       </Screen>
       {draft && data ? (
         <BlockSheet
@@ -232,3 +294,19 @@ export default function Horaire() {
     </>
   );
 }
+
+const styles = StyleSheet.create({
+  week: { borderRadius: shape.card, paddingVertical: space.sm, paddingHorizontal: space.xs, gap: space.xs },
+  weekBar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  weekTitle: { flex: 1, alignItems: "center", gap: 1 },
+  strip: { flexDirection: "row" },
+  day: { flex: 1, alignItems: "center", gap: 3, paddingVertical: space.xs, minHeight: 64 },
+  dayNumber: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
+  dot: { width: 6, height: 6, borderRadius: 3 },
+  agenda: { borderRadius: shape.card, overflow: "hidden" },
+  item: { flexDirection: "row", alignItems: "stretch", gap: space.md, paddingHorizontal: space.lg, paddingVertical: space.md, minHeight: 60 },
+  times: { width: 64, justifyContent: "center", gap: 1 },
+  clock: { fontVariant: ["tabular-nums"] },
+  bar: { width: 4, borderRadius: 2 },
+  itemText: { flex: 1, minWidth: 0, justifyContent: "center", gap: 3 },
+});

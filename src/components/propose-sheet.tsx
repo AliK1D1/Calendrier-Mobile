@@ -4,10 +4,11 @@
  */
 import { formatInTimeZone } from "date-fns-tz";
 import { useState } from "react";
-import { Modal, ScrollView, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { ScrollView, View } from "react-native";
 
-import { Body, Button, Chip, ErrorText, Field, Heading, Label, Muted, Row } from "@/components/ui";
+import { Sheet } from "@/components/sheet";
+import { CLOCK_STEPS, Stepper } from "@/components/steppers";
+import { Chip, ErrorText, Field, Footnote, Label, Notice, Row, Segmented } from "@/components/ui";
 import { nextDays, type ProposeDraft, proposeMoment, type RepeatChoice, repeatOf, shiftStart } from "@/features/propose";
 import { formatDuration } from "@/lib/i18n/format";
 import { PLAN_DURATIONS } from "@/lib/plans/validation";
@@ -16,7 +17,6 @@ import { formatClockFr, parseClock } from "@/lib/scheduling/weeklyBlocks";
 import { locale, t } from "@/services/i18n";
 import { useAuthed } from "@/services/session";
 import { space } from "@/theme/colors";
-import { usePalette } from "@/theme/use-palette";
 
 const tp = t.plans.propose;
 
@@ -35,7 +35,6 @@ export function ProposeSheet({
   onSent: (message: string) => void;
 }) {
   const { supabase, userId } = useAuthed();
-  const c = usePalette();
   const [form, setForm] = useState<ProposeDraft>(draft);
   const [repeat, setRepeat] = useState<RepeatChoice>("none");
   const [busy, setBusy] = useState(false);
@@ -70,78 +69,78 @@ export function ProposeSheet({
   const startMin = parseClock(form.start) ?? 0;
 
   return (
-    <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-      <SafeAreaView style={{ flex: 1, backgroundColor: c.background }}>
-        <ScrollView contentContainerStyle={{ padding: space.lg, gap: space.md }} keyboardShouldPersistTaps="handled">
-          <Heading>{tp.title}</Heading>
-          {form.fromSlot ? <Muted>{tp.slotFound(form.fromSlot)}</Muted> : null}
+    <Sheet title={tp.title} confirmLabel={busy ? tp.sending : tp.send} busy={busy} onConfirm={() => void send()} onClose={onClose}>
+      {form.fromSlot ? <Notice tone="info">{tp.slotFound(form.fromSlot)}</Notice> : null}
+      <ErrorText>{error}</ErrorText>
 
-          <Field label={tp.what} placeholder={tp.whatPlaceholder} value={form.title} onChangeText={(v) => set({ title: v })} maxLength={80} />
+      <Field label={tp.what} placeholder={tp.whatPlaceholder} value={form.title} onChangeText={(v) => set({ title: v })} maxLength={80} />
 
-          <Label>{tp.day}</Label>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: space.sm }}>
-            {days.map((d) => (
-              <Chip key={d.day} label={d.label} selected={form.date === d.day} onPress={() => set({ date: d.day })} />
-            ))}
-          </ScrollView>
-
-          <Label>{tp.start}</Label>
-          <Row>
-            <Button label="− 1 h" variant="secondary" onPress={() => set({ start: shiftStart(form.start, -4) })} />
-            <Button label="− 15" variant="secondary" onPress={() => set({ start: shiftStart(form.start, -1) })} />
-            <View style={{ minWidth: 80, alignItems: "center" }}>
-              <Body bold>{formatClockFr(startMin)}</Body>
-            </View>
-            <Button label="+ 15" variant="secondary" onPress={() => set({ start: shiftStart(form.start, 1) })} />
-            <Button label="+ 1 h" variant="secondary" onPress={() => set({ start: shiftStart(form.start, 4) })} />
-          </Row>
-
-          <Label>{tp.duration}</Label>
-          <Row>
-            {[...new Set([form.durationMinutes, ...PLAN_DURATIONS.slice(0, 6)])]
-              .sort((a, b) => a - b)
-              .map((d) => (
-                <Chip key={d} label={formatDuration(d, locale)} selected={form.durationMinutes === d} onPress={() => set({ durationMinutes: d })} />
-              ))}
-          </Row>
-
-          <Label>{tp.repeat}</Label>
-          <Row>
-            {(["none", "day1", "week1"] as const).map((r) => (
-              <Chip key={r} label={tp.repeatChoices[r]} selected={repeat === r} onPress={() => setRepeat(r)} />
-            ))}
-          </Row>
-
-          <Label>{tp.where}</Label>
-          <Row>
-            {places.map((p) => (
-              <Chip key={p.id} label={p.name} selected={form.placeId === p.id} onPress={() => set({ placeId: p.id })} />
-            ))}
-            <Chip label={tp.otherPlace} selected={form.placeId === null} onPress={() => set({ placeId: null })} />
-          </Row>
-          {form.placeId === null ? (
-            <Field label={tp.freePlace} placeholder={tp.freePlacePlaceholder} value={form.location} onChangeText={(v) => set({ location: v })} maxLength={100} />
-          ) : null}
-
-          <Label>{tp.who}</Label>
-          <Row>
-            <Chip label={tp.wholeGroup} selected={everyone} onPress={() => set({ inviteeIds: null })} />
-            <Chip label={tp.somePeople} selected={!everyone} onPress={() => set({ inviteeIds: others.map((m) => m.userId) })} />
-          </Row>
-          {!everyone ? (
-            <Row>
-              {others.map((m) => (
-                <Chip key={m.userId} label={m.displayName} selected={chosen.includes(m.userId)} onPress={() => toggle(m.userId)} />
-              ))}
-            </Row>
-          ) : null}
-          <Muted>{tp.whoHint}</Muted>
-
-          <ErrorText>{error}</ErrorText>
-          <Button label={busy ? tp.sending : tp.send} busy={busy} onPress={() => void send()} />
-          <Button label="Annuler" variant="secondary" disabled={busy} onPress={onClose} />
+      <View style={{ gap: space.sm }}>
+        <Label>{tp.day}</Label>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: space.sm }}>
+          {days.map((d) => (
+            <Chip key={d.day} label={d.label} selected={form.date === d.day} onPress={() => set({ date: d.day })} />
+          ))}
         </ScrollView>
-      </SafeAreaView>
-    </Modal>
+      </View>
+
+      <Stepper
+        label={tp.start}
+        value={formatClockFr(startMin)}
+        steps={CLOCK_STEPS}
+        onShift={(by) => set({ start: shiftStart(form.start, by / 15) })}
+      />
+
+      <View style={{ gap: space.sm }}>
+        <Label>{tp.duration}</Label>
+        <Row>
+          {[...new Set([form.durationMinutes, ...PLAN_DURATIONS.slice(0, 6)])]
+            .sort((a, b) => a - b)
+            .map((d) => (
+              <Chip key={d} label={formatDuration(d, locale)} selected={form.durationMinutes === d} onPress={() => set({ durationMinutes: d })} />
+            ))}
+        </Row>
+      </View>
+
+      <View style={{ gap: space.sm }}>
+        <Label>{tp.repeat}</Label>
+        <Row>
+          {(["none", "day1", "week1"] as const).map((r) => (
+            <Chip key={r} label={tp.repeatChoices[r]} selected={repeat === r} onPress={() => setRepeat(r)} />
+          ))}
+        </Row>
+      </View>
+
+      <View style={{ gap: space.sm }}>
+        <Label>{tp.where}</Label>
+        <Row>
+          {places.map((p) => (
+            <Chip key={p.id} label={p.name} selected={form.placeId === p.id} onPress={() => set({ placeId: p.id })} />
+          ))}
+          <Chip label={tp.otherPlace} selected={form.placeId === null} onPress={() => set({ placeId: null })} />
+        </Row>
+        {form.placeId === null ? (
+          <Field label={tp.freePlace} placeholder={tp.freePlacePlaceholder} value={form.location} onChangeText={(v) => set({ location: v })} maxLength={100} />
+        ) : null}
+      </View>
+
+      <View style={{ gap: space.sm }}>
+        <Label>{tp.who}</Label>
+        <Segmented
+          accessibilityLabel={tp.who}
+          options={[{ value: "all", label: tp.wholeGroup }, { value: "some", label: tp.somePeople }]}
+          value={everyone ? "all" : "some"}
+          onChange={(v) => set({ inviteeIds: v === "all" ? null : others.map((m) => m.userId) })}
+        />
+        {!everyone ? (
+          <Row>
+            {others.map((m) => (
+              <Chip key={m.userId} label={m.displayName} selected={chosen.includes(m.userId)} onPress={() => toggle(m.userId)} />
+            ))}
+          </Row>
+        ) : null}
+        <Footnote>{tp.whoHint}</Footnote>
+      </View>
+    </Sheet>
   );
 }

@@ -34,6 +34,7 @@ export function usePalette(): Palette {
     accentText: brand.primary,
     danger: Color.ios.systemRed,
     success: Color.ios.systemGreen,
+    warning: Color.ios.systemOrange,
   };
 }
 

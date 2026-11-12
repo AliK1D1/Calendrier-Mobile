@@ -24,6 +24,8 @@ export interface Palette {
   accentText: ColorValue;
   danger: ColorValue;
   success: ColorValue;
+  /** Orange : quelque chose attend une réponse, ou est à revoir. */
+  warning: ColorValue;
 }
 
 /** Palette en codes hexadécimaux (le thème de navigation demande des chaînes). */
@@ -44,6 +46,7 @@ export const palettes: Record<Scheme, HexPalette> = {
     accentText: "#22406f",
     danger: "#cc3a2e",
     success: "#1f7a4d",
+    warning: "#a35a00",
   },
   dark: {
     background: "#11151c",
@@ -57,6 +60,7 @@ export const palettes: Record<Scheme, HexPalette> = {
     accentText: "#eef1f6",
     danger: "#ef6b5b",
     success: "#5fc48f",
+    warning: "#f0a63c",
   },
 };
 

@@ -2,12 +2,14 @@ import Constants from "expo-constants";
 import { router } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
 import { useState } from "react";
-import { View } from "react-native";
+import { Text, View } from "react-native";
 
 import { AppearanceCard } from "@/components/appearance-card";
+import { Avatar } from "@/components/avatar";
+import { ListGroup, ListRow } from "@/components/list";
+import { Stepper } from "@/components/steppers";
 import { Toggle } from "@/components/toggle";
-
-import { Body, Button, Card, Chip, ErrorText, Field, Heading, Label, Loading, Muted, Row, Screen } from "@/components/ui";
+import { Button, Card, Chip, ErrorText, Field, Footnote, Heading, Label, Loading, Muted, Notice, Row, Screen, Section, Segmented } from "@/components/ui";
 import { shiftClock } from "@/features/blocks";
 import { savePrivacy, saveOutingLimits, saveProfile, saveQuietHours } from "@/features/settings";
 import { TRAVEL_MODE_LABELS, TRAVEL_MODES } from "@/lib/places/validation";
@@ -20,6 +22,8 @@ import { useAuthed, useSession } from "@/services/session";
 import { SITE_URL } from "@/services/site";
 import { useLoad } from "@/services/use-load";
 import { space } from "@/theme/colors";
+import { type } from "@/theme/tokens";
+import { usePalette } from "@/theme/use-palette";
 
 type Saved = { ok: true } | { ok: false; error: string };
 
@@ -39,23 +43,24 @@ function useSave() {
 function Message({ msg }: { msg: { ok: boolean; text: string } | null }) {
   if (!msg) return null;
   if (!msg.ok) return <ErrorText>{msg.text}</ErrorText>;
-  return <Body bold>{`✓ ${msg.text}`}</Body>;
+  return <Notice>{msg.text}</Notice>;
 }
+
+const HALF_HOUR = [{ label: "30", by: 30 }] as const;
 
 /** Heure facultative : « Pas de limite » ou une heure réglée par pas de 30 min. */
 function OptionalClock({ label, value, fallback, onChange }: { label: string; value: string; fallback: string; onChange: (v: string) => void }) {
   return (
-    <View style={{ gap: space.xs }}>
+    <View style={{ gap: space.sm }}>
       <Label>{label}</Label>
-      <Row>
-        <Chip label="Pas de limite" selected={value === ""} onPress={() => onChange("")} />
-        <Chip label={value ? formatClockFr(parseClock(value) ?? 0) : "Choisir une heure"} selected={value !== ""} onPress={() => onChange(value || fallback)} />
-      </Row>
+      <Segmented
+        accessibilityLabel={label}
+        options={[{ value: "none", label: "Pas de limite" }, { value: "set", label: value ? formatClockFr(parseClock(value) ?? 0) : "Choisir une heure" }]}
+        value={value === "" ? "none" : "set"}
+        onChange={(v) => onChange(v === "none" ? "" : value || fallback)}
+      />
       {value ? (
-        <Row>
-          <Button label="− 30 min" variant="secondary" onPress={() => onChange(shiftClock(value, -30, 30, 23 * 60 + 30))} />
-          <Button label="+ 30 min" variant="secondary" onPress={() => onChange(shiftClock(value, 30, 30, 23 * 60 + 30))} />
-        </Row>
+        <Stepper label={label} hideLabel value={formatClockFr(parseClock(value) ?? 0)} steps={HALF_HOUR} onShift={(m) => onChange(shiftClock(value, m, 30, 23 * 60 + 30))} />
       ) : null}
     </View>
   );
@@ -104,6 +109,7 @@ function ProfileForms({
   supabaseSignOut: () => Promise<unknown>;
 }) {
   const { supabase, userId } = useAuthed();
+  const c = usePalette();
   const q = data.quiet ? quietHoursFromDb(data.quiet.unavailable_before, data.quiet.unavailable_after) : { before: null, after: null };
   const l = data.limits ? outingLimitsFromDb(data.limits.max_outings_per_day, data.limits.max_outings_per_week) : { perDay: null, perWeek: null };
 
@@ -119,89 +125,125 @@ function ProfileForms({
   const pv = useSave();
   const ol = useSave();
   const [signingOut, setSigningOut] = useState(false);
+  const shownName = data.profile?.display_name || t.home.user;
+
+  // Confidentialité : l'interrupteur enregistre tout de suite (et revient en arrière si ça échoue).
+  function changeHide(next: boolean) {
+    setHide(next);
+    void pv.run(
+      savePrivacy(supabase, userId, next).then((r) => {
+        if (!r.ok) setHide(!next);
+        return r;
+      }),
+      "Réglage enregistré.",
+    );
+  }
 
   return (
     <Screen title={t.common.nav.profile}>
-      <Card>
-        <Muted>{t.home.signedInAs}</Muted>
-        <Body bold>{data.profile?.display_name || t.home.user}</Body>
+      <View style={{ alignItems: "center", gap: space.xs }}>
+        <Avatar name={shownName} size={76} />
+        <Text accessibilityRole="header" style={[type.title, { color: c.text, marginTop: space.sm, textAlign: "center" }]}>
+          {shownName}
+        </Text>
         {email ? <Muted>{email}</Muted> : null}
-      </Card>
+      </View>
 
-      <Heading>Mon profil</Heading>
-      <Card>
-        <Field label="Ton nom (vu par tes amis)" value={name} onChangeText={setName} maxLength={60} autoComplete="nickname" />
-        <Label>Mode de transport</Label>
-        <Row>
-          {TRAVEL_MODES.map((m) => (
-            <Chip key={m} label={TRAVEL_MODE_LABELS[m]} selected={mode === m} onPress={() => setMode(m)} />
-          ))}
-        </Row>
-        <Message msg={p.msg} />
-        <Button label={p.busy ? "Enregistrement…" : "Enregistrer"} busy={p.busy} disabled={p.busy} onPress={() => void p.run(saveProfile(supabase, userId, { displayName: name, travelMode: mode }), "Profil enregistré.")} />
-      </Card>
-
-      <Button label="Mes lieux (maison, cégep, travail…)" variant="secondary" onPress={() => router.push("/lieux")} />
-
-      <Heading>Heures où je ne sors pas</Heading>
-      <Card>
-        <Muted>Aucun moment ne te sera proposé en dehors de ces heures.</Muted>
-        <OptionalClock label="Je ne sors pas avant" value={before} fallback="09:00" onChange={setBefore} />
-        <OptionalClock label="Je ne sors pas après" value={after} fallback="22:00" onChange={setAfter} />
-        <Message msg={qh.msg} />
-        <Button label={qh.busy ? "Enregistrement…" : "Enregistrer ces heures"} busy={qh.busy} disabled={qh.busy} onPress={() => void qh.run(saveQuietHours(supabase, userId, { before, after }), "Heures enregistrées.")} />
-      </Card>
-
-      <Heading>{t.plans.outingLimit.title}</Heading>
-      <Card>
-        <Muted>{t.plans.outingLimit.description}</Muted>
-        <Label>{t.plans.outingLimit.perDay}</Label>
-        <Row>
-          <Chip label={t.plans.outingLimit.none} selected={perDay === null} onPress={() => setPerDay(null)} />
-          {PER_DAY.map((n) => <Chip key={n} label={String(n)} selected={perDay === n} onPress={() => setPerDay(n)} />)}
-        </Row>
-        <Label>{t.plans.outingLimit.perWeek}</Label>
-        <Row>
-          <Chip label={t.plans.outingLimit.none} selected={perWeek === null} onPress={() => setPerWeek(null)} />
-          {PER_WEEK.map((n) => <Chip key={n} label={String(n)} selected={perWeek === n} onPress={() => setPerWeek(n)} />)}
-        </Row>
-        <Message msg={ol.msg} />
-        <Button label={t.plans.outingLimit.save} busy={ol.busy} disabled={ol.busy || data.limits === null} onPress={() => void ol.run(saveOutingLimits(supabase, userId, { perDay, perWeek }), t.plans.outingLimit.saved)} />
-        {data.limits === null ? <Muted>{t.plans.outingLimit.outdated}</Muted> : null}
-      </Card>
-
-      <Heading>Confidentialité</Heading>
-      <Card>
-        <Row>
-          <View style={{ flex: 1 }}>
-            <Body>Les membres de mes groupes voient « Occupé » au lieu du titre de mes cours</Body>
+      <Section>
+        <Heading>Mon profil</Heading>
+        <Card style={{ gap: space.md }}>
+          <Field label="Ton nom (vu par tes amis)" value={name} onChangeText={setName} maxLength={60} autoComplete="nickname" />
+          <View style={{ gap: space.sm }}>
+            <Label>Mode de transport</Label>
+            <Row>
+              {TRAVEL_MODES.map((m) => (
+                <Chip key={m} label={TRAVEL_MODE_LABELS[m]} selected={mode === m} onPress={() => setMode(m)} />
+              ))}
+            </Row>
           </View>
-          <Toggle value={hide} onValueChange={setHide} accessibilityLabel="Masquer le titre de mes cours" />
-        </Row>
+          <Message msg={p.msg} />
+          <Button label={p.busy ? "Enregistrement…" : "Enregistrer"} busy={p.busy} disabled={p.busy} onPress={() => void p.run(saveProfile(supabase, userId, { displayName: name, travelMode: mode }), "Profil enregistré.")} />
+        </Card>
+      </Section>
+
+      <ListGroup>
+        <ListRow icon="pin" title="Mes lieux" subtitle="Maison, cégep, travail…" onPress={() => router.push("/lieux")} />
+        <ListRow icon="study" iconColor={c.success} title="Étude" subtitle="Examens, travaux et séances" onPress={() => router.push("/etude")} />
+      </ListGroup>
+
+      <Section>
+        <View style={{ gap: 2 }}>
+          <Heading>Heures où je ne sors pas</Heading>
+          <Muted>Aucun moment ne te sera proposé en dehors de ces heures.</Muted>
+        </View>
+        <Card style={{ gap: space.lg }}>
+          <OptionalClock label="Je ne sors pas avant" value={before} fallback="09:00" onChange={setBefore} />
+          <OptionalClock label="Je ne sors pas après" value={after} fallback="22:00" onChange={setAfter} />
+          <Message msg={qh.msg} />
+          <Button label={qh.busy ? "Enregistrement…" : "Enregistrer ces heures"} busy={qh.busy} disabled={qh.busy} onPress={() => void qh.run(saveQuietHours(supabase, userId, { before, after }), "Heures enregistrées.")} />
+        </Card>
+      </Section>
+
+      <Section>
+        <View style={{ gap: 2 }}>
+          <Heading>{t.plans.outingLimit.title}</Heading>
+          <Muted>{t.plans.outingLimit.description}</Muted>
+        </View>
+        <Card style={{ gap: space.md }}>
+          <View style={{ gap: space.sm }}>
+            <Label>{t.plans.outingLimit.perDay}</Label>
+            <Row>
+              <Chip label={t.plans.outingLimit.none} selected={perDay === null} onPress={() => setPerDay(null)} />
+              {PER_DAY.map((n) => <Chip key={n} label={String(n)} selected={perDay === n} onPress={() => setPerDay(n)} />)}
+            </Row>
+          </View>
+          <View style={{ gap: space.sm }}>
+            <Label>{t.plans.outingLimit.perWeek}</Label>
+            <Row>
+              <Chip label={t.plans.outingLimit.none} selected={perWeek === null} onPress={() => setPerWeek(null)} />
+              {PER_WEEK.map((n) => <Chip key={n} label={String(n)} selected={perWeek === n} onPress={() => setPerWeek(n)} />)}
+            </Row>
+          </View>
+          <Message msg={ol.msg} />
+          <Button label={t.plans.outingLimit.save} busy={ol.busy} disabled={ol.busy || data.limits === null} onPress={() => void ol.run(saveOutingLimits(supabase, userId, { perDay, perWeek }), t.plans.outingLimit.saved)} />
+          {data.limits === null ? <Footnote>{t.plans.outingLimit.outdated}</Footnote> : null}
+        </Card>
+      </Section>
+
+      <Section>
+        <ListGroup header="Confidentialité" footer="Activé : les membres de tes groupes voient « Occupé » au lieu du titre de tes cours.">
+          <ListRow
+            icon="lock"
+            title="Masquer le titre de mes cours"
+            trailing={<Toggle value={hide} onValueChange={changeHide} accessibilityLabel="Masquer le titre de mes cours" />}
+          />
+        </ListGroup>
         <Message msg={pv.msg} />
-        <Button label={pv.busy ? "Enregistrement…" : "Enregistrer"} variant="secondary" busy={pv.busy} disabled={pv.busy} onPress={() => void pv.run(savePrivacy(supabase, userId, hide), "Réglage enregistré.")} />
-      </Card>
+      </Section>
 
-      <Heading>Apparence</Heading>
-      <AppearanceCard />
+      <Section>
+        <Heading>Apparence</Heading>
+        <AppearanceCard />
+      </Section>
 
-      <Card>
-        <Body bold>Sur le site seulement</Body>
-        <Muted>Langue, Outlook, calendriers abonnés et préférences d&apos;étude se règlent sur le site. Ils s&apos;appliquent aussi à l&apos;app.</Muted>
-        <Button label="Ouvrir mon profil sur le site" variant="secondary" onPress={() => void WebBrowser.openBrowserAsync(`${SITE_URL}/profil`)} />
-      </Card>
+      <ListGroup footer="Langue, Outlook, calendriers abonnés et préférences d'étude se règlent sur le site. Ils s'appliquent aussi à l'app.">
+        <ListRow icon="external" title="Ouvrir mon profil sur le site" chevron={false} onPress={() => void WebBrowser.openBrowserAsync(`${SITE_URL}/profil`)} />
+      </ListGroup>
 
-      <Button
-        label={t.home.signOut}
-        variant="danger"
-        busy={signingOut}
-        onPress={() => {
-          setSigningOut(true);
-          // La session change : l'app revient toute seule à l'écran de connexion.
-          void supabaseSignOut().finally(() => setSigningOut(false));
-        }}
-      />
-      <Muted>{`Freecrew ${Constants.expoConfig?.version ?? ""}`}</Muted>
+      <ListGroup>
+        <ListRow
+          icon="signOut"
+          destructive
+          title={signingOut ? "Déconnexion…" : t.home.signOut}
+          onPress={() => {
+            if (signingOut) return;
+            setSigningOut(true);
+            // La session change : l'app revient toute seule à l'écran de connexion.
+            void supabaseSignOut().finally(() => setSigningOut(false));
+          }}
+        />
+      </ListGroup>
+      <Footnote center>{`Freecrew ${Constants.expoConfig?.version ?? ""}`}</Footnote>
     </Screen>
   );
 }

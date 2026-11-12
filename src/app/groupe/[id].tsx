@@ -2,13 +2,15 @@ import { Stack, useLocalSearchParams } from "expo-router";
 import { useState } from "react";
 import { Platform, Share } from "react-native";
 
+import { Avatar, AvatarStack } from "@/components/avatar";
 import { icons } from "@/components/icons";
+import { ListGroup, ListRow } from "@/components/list";
 
 import { MeetupFinder } from "@/components/meetup-finder";
 import { ProposeSheet } from "@/components/propose-sheet";
 
 import { PlanCard } from "@/components/plan-card";
-import { Badge, Body, Button, Card, ErrorText, Heading, Loading, Muted, Row, Screen } from "@/components/ui";
+import { Badge, Body, Button, Card, EmptyState, ErrorText, Fill, Heading, Loading, Muted, Notice, Row, Screen, Section } from "@/components/ui";
 import { getGroupDetail } from "@/lib/groups/queries";
 import { inviteUrl } from "@/lib/groups/validation";
 import type { ProposalView } from "@/lib/meetups/search";
@@ -19,6 +21,7 @@ import { useAuthed } from "@/services/session";
 import { SITE_URL } from "@/services/site";
 import { useLoad } from "@/services/use-load";
 import { draftFromProposal, type ProposeDraft } from "@/features/propose";
+import { space } from "@/theme/colors";
 
 const tg = t.groups;
 
@@ -78,6 +81,9 @@ export default function Groupe() {
     if (group && link) void Share.share({ message: `${tg.shareText(group.name)} : ${link}` });
   };
 
+  const alone = group ? group.members.length <= 1 : false;
+  const memberNames = group ? group.members.map((m) => m.displayName) : [];
+
   return (
     <>
       <Stack.Screen options={{ title: group?.name ?? "Groupe" }} />
@@ -91,39 +97,64 @@ export default function Groupe() {
       <Screen edges={[]} refreshing={refreshing} onRefresh={refresh}>
         <ErrorText>{error}</ErrorText>
         {!data && !error ? <Loading /> : null}
-        {data && !group ? <Muted>Ce groupe n&apos;existe plus, ou tu n&apos;en fais plus partie.</Muted> : null}
+        {data && !group ? (
+          <EmptyState icon="group" title="Groupe introuvable" text="Ce groupe n'existe plus, ou tu n'en fais plus partie." />
+        ) : null}
         {group && link ? (
           <>
-            <Card>
-              <Body bold>{group.members.length <= 1 ? tg.inviteFirst : tg.inviteFriends}</Body>
-              <Muted>{tg.inviteBody}</Muted>
-              <Muted>{link}</Muted>
-              <Button label={tg.share} onPress={share} />
-            </Card>
+            {alone ? (
+              <Card tone="accent">
+                <Body bold>{tg.inviteFirst}</Body>
+                <Muted>{tg.aloneHint}</Muted>
+                <Button icon="share" label={tg.share} onPress={share} />
+              </Card>
+            ) : (
+              <Card>
+                <Row nowrap gap={space.md}>
+                  <AvatarStack names={memberNames} size={32} />
+                  <Fill>
+                    <Body bold>{tg.members(group.members.length)}</Body>
+                  </Fill>
+                  <Button size="small" variant="secondary" icon="personAdd" label={tg.sections.invite} onPress={share} />
+                </Row>
+              </Card>
+            )}
 
-            <Heading>{tg.groupPlans}</Heading>
-            {flash ? <Body bold>{flash}</Body> : null}
-            {data.plans.length === 0 ? <Muted>{tg.noPlans}</Muted> : null}
-            {data.plans.map((p) => <PlanCard key={p.id} plan={p} onChanged={() => void reload()} />)}
-            <Button label={tg.proposeMoment} variant="secondary" onPress={proposeFree} />
+            <Notice>{flash}</Notice>
 
-            {group.members.length > 1 ? (
-              <>
+            <Section>
+              <Heading action={{ label: tg.proposeMoment, onPress: proposeFree }}>{tg.groupPlans}</Heading>
+              {data.plans.length === 0 ? (
+                <Muted>
+                  {alone
+                    ? "Aucun plan à venir. Tu peux déjà proposer un moment : tes amis le verront en arrivant."
+                    : `Aucun plan à venir. Cherche un moment ci-dessous, ou touche « ${tg.proposeMoment} ».`}
+                </Muted>
+              ) : null}
+              {data.plans.map((p) => <PlanCard key={p.id} plan={p} onChanged={() => void reload()} />)}
+            </Section>
+
+            {!alone ? (
+              <Section>
                 <Heading>{t.meetups.title}</Heading>
                 <MeetupFinder groupId={group.id} members={group.members} onPropose={proposeFromSlot} />
-              </>
+              </Section>
             ) : null}
 
-            <Heading>{`${tg.sections.members} (${group.members.length})`}</Heading>
-            <Card>
+            <ListGroup header={`${tg.sections.members} (${group.members.length})`}>
               {group.members.map((m) => (
-                <Row key={m.userId}>
-                  <Body>{m.userId === userId ? `${m.displayName} (toi)` : m.displayName}</Body>
-                  {m.role === "admin" ? <Badge>{tg.admin}</Badge> : null}
-                </Row>
+                <ListRow
+                  key={m.userId}
+                  leading={<Avatar name={m.displayName} size={36} />}
+                  title={m.userId === userId ? `${m.displayName}${tg.you}` : m.displayName}
+                  trailing={m.role === "admin" ? <Badge>{tg.admin}</Badge> : undefined}
+                />
               ))}
-            </Card>
-            {group.members.length <= 1 ? <Muted>{tg.aloneHint}</Muted> : null}
+            </ListGroup>
+
+            <ListGroup header={tg.inviteLink} footer={tg.inviteBody}>
+              <ListRow icon="link" title={tg.share} subtitle={link} onPress={share} />
+            </ListGroup>
           </>
         ) : null}
       </Screen>

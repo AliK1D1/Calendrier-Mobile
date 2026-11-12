@@ -2,7 +2,8 @@ import { Link } from "expo-router";
 import { useState } from "react";
 import { KeyboardAvoidingView, Platform, View } from "react-native";
 
-import { Body, Button, Card, ErrorText, Field, Muted, Screen, Title } from "@/components/ui";
+import { BrandHeader } from "@/components/brand";
+import { Button, Card, ErrorText, Field, Muted, Screen } from "@/components/ui";
 import { loginErrorCode, normalizeEmail, validateLogin } from "@/features/auth";
 import { t } from "@/services/i18n";
 import { useSession } from "@/services/session";
@@ -37,12 +38,8 @@ export default function Connexion() {
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
       <Screen edges={["top"]}>
-        <View style={{ gap: space.xs, marginTop: space.xl }}>
-          <Body bold>Freecrew</Body>
-          <Title>{t.auth.title}</Title>
-          <Muted>{t.auth.description}</Muted>
-        </View>
-        <Card>
+        <BrandHeader title={t.auth.title} text={t.auth.description} />
+        <Card style={{ gap: space.md }}>
           <Field
             label={t.auth.email}
             placeholder={t.auth.emailPlaceholder}
@@ -67,7 +64,7 @@ export default function Connexion() {
           <ErrorText>{error}</ErrorText>
           <Button label={t.auth.signIn} onPress={() => void submit()} busy={busy} disabled={!supabase} />
         </Card>
-        <View style={{ flexDirection: "row", gap: space.sm, flexWrap: "wrap", alignItems: "center" }}>
+        <View style={{ flexDirection: "row", gap: space.sm, flexWrap: "wrap", alignItems: "center", justifyContent: "center" }}>
           <Muted>{t.auth.noAccount}</Muted>
           <Link href="/inscription" style={{ color: c.primary, fontSize: 15, fontWeight: "600" }}>
             {t.auth.createAccount}

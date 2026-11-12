@@ -1,20 +1,25 @@
 import { router } from "expo-router";
 import { useState } from "react";
+import { Text, View } from "react-native";
 
 import { AddressSearch } from "@/components/address-search";
-import { Body, Button, Card, Chip, ErrorText, Muted, Row, Screen } from "@/components/ui";
+import { Button, Card, Chip, ErrorText, Fill, Muted, Row, Screen } from "@/components/ui";
 import { completeOnboarding, skipOnboarding } from "@/features/settings";
 import type { GeocodeResult } from "@/lib/geocoding/nominatim";
 import { TRAVEL_MODE_LABELS, TRAVEL_MODES } from "@/lib/places/validation";
 import type { TravelMode } from "@/lib/scheduling/types";
 import { t } from "@/services/i18n";
 import { useAuthed } from "@/services/session";
+import { space } from "@/theme/colors";
+import { type } from "@/theme/tokens";
+import { usePalette } from "@/theme/use-palette";
 
 const to = t.onboarding;
 
 /** Premier accueil : maison, cégep ou école (facultatif), mode de transport. */
 export default function Bienvenue() {
   const { supabase } = useAuthed();
+  const c = usePalette();
   const [step, setStep] = useState(0);
   const [home, setHome] = useState<GeocodeResult | null>(null);
   const [school, setSchool] = useState<GeocodeResult | null>(null);
@@ -51,10 +56,18 @@ export default function Bienvenue() {
 
   return (
     <Screen edges={[]} subtitle={to.intro}>
-      <Card>
-        <Muted>{to.stepOf(step + 1, 3)}</Muted>
-        <Body bold>{to.steps[step]}</Body>
-        <Muted>{to.stepHints[step]}</Muted>
+      <Card style={{ gap: space.md }}>
+        {/* Avancement : une barre par question. */}
+        <View accessible accessibilityLabel={to.stepOf(step + 1, 3)} style={{ flexDirection: "row", gap: space.xs + 2 }}>
+          {[0, 1, 2].map((n) => (
+            <View key={n} style={{ flex: 1, height: 5, borderRadius: 3, backgroundColor: n <= step ? c.primary : c.accent }} />
+          ))}
+        </View>
+        <View style={{ gap: 2 }}>
+          <Text style={[type.footnote, { color: c.muted }]}>{to.stepOf(step + 1, 3)}</Text>
+          <Text accessibilityRole="header" style={[type.title, { color: c.text }]}>{to.steps[step]}</Text>
+          <Muted>{to.stepHints[step]}</Muted>
+        </View>
         {step === 0 ? (
           <AddressSearch label={to.homeLabel} placeholder={to.homePlaceholder} selected={home} onSelect={setHome} />
         ) : null}
@@ -69,17 +82,23 @@ export default function Bienvenue() {
           </Row>
         ) : null}
         <ErrorText>{error}</ErrorText>
-        {step === 0 ? <Button label={to.continue} disabled={!home} onPress={() => setStep(1)} /> : null}
+        <Row nowrap>
+          {step > 0 ? (
+            <Fill>
+              <Button label={to.back} variant="secondary" disabled={busy} onPress={() => setStep(step - 1)} />
+            </Fill>
+          ) : null}
+          <Fill>
+            {step === 0 ? <Button label={to.continue} disabled={!home} onPress={() => setStep(1)} /> : null}
+            {step === 1 ? <Button label={to.continue} disabled={!school} onPress={() => setStep(2)} /> : null}
+            {step === 2 ? <Button label={to.finish} busy={busy} disabled={busy || !home} onPress={() => void finish()} /> : null}
+          </Fill>
+        </Row>
         {step === 1 ? (
-          <>
-            <Button label={to.continue} disabled={!school} onPress={() => setStep(2)} />
-            <Button label={to.noSchool} variant="secondary" onPress={() => { setSchool(null); setStep(2); }} />
-          </>
+          <Button label={to.noSchool} variant="plain" size="small" onPress={() => { setSchool(null); setStep(2); }} />
         ) : null}
-        {step === 2 ? <Button label={to.finish} busy={busy} disabled={busy || !home} onPress={() => void finish()} /> : null}
-        {step > 0 ? <Button label={to.back} variant="secondary" disabled={busy} onPress={() => setStep(step - 1)} /> : null}
       </Card>
-      <Button label={to.later} variant="secondary" disabled={busy} onPress={() => void later()} />
+      <Button label={to.later} variant="plain" size="small" disabled={busy} onPress={() => void later()} />
     </Screen>
   );
 }

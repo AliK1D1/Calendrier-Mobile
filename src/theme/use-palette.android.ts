@@ -39,6 +39,7 @@ export function usePalette(): HexPalette {
     accentText: dyn(m.onSecondaryContainer, f.accentText),
     danger: dyn(m.error, f.danger),
     success: f.success,
+    warning: f.warning,
   };
 }
 
