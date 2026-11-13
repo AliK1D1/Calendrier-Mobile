@@ -86,7 +86,7 @@ export default function Accueil() {
             <Heading>{t.home.plans.awaiting(data.plans.awaiting.length)}</Heading>
             <Muted>{t.home.plans.awaitingHint}</Muted>
           </View>
-          {data.plans.awaiting.map((p) => <PlanCard key={p.id} plan={p} onChanged={() => void reload()} />)}
+          {data.plans.awaiting.map((p, i) => <PlanCard key={p.id} index={i} plan={p} onChanged={() => void reload()} />)}
         </Section>
       ) : null}
 
@@ -95,7 +95,7 @@ export default function Accueil() {
           <Heading action={{ label: data.plans.moreUpcoming > 0 ? `Tout voir (${data.plans.upcoming.length + data.plans.moreUpcoming})` : "Tout voir", onPress: () => router.push("/plans") }}>
             {t.home.plans.upcoming}
           </Heading>
-          {data.plans.upcoming.map((p) => <PlanCard key={p.id} plan={p} onChanged={() => void reload()} />)}
+          {data.plans.upcoming.map((p, i) => <PlanCard key={p.id} index={i + data.plans.awaiting.length} plan={p} onChanged={() => void reload()} />)}
         </Section>
       ) : null}
 

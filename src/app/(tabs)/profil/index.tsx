@@ -7,6 +7,7 @@ import { Text, View } from "react-native";
 import { AppearanceCard } from "@/components/appearance-card";
 import { Avatar } from "@/components/avatar";
 import { ListGroup, ListRow } from "@/components/list";
+import { Reveal } from "@/components/motion";
 import { NotificationsCard } from "@/components/notifications-card";
 import { Stepper } from "@/components/steppers";
 import { Toggle } from "@/components/toggle";
@@ -62,7 +63,9 @@ function OptionalClock({ label, value, fallback, onChange }: { label: string; va
         onChange={(v) => onChange(v === "none" ? "" : value || fallback)}
       />
       {value ? (
+        <Reveal>
         <Stepper label={label} hideLabel value={formatClockFr(parseClock(value) ?? 0)} steps={HALF_HOUR} onShift={(m) => onChange(shiftClock(value, m, 30, 23 * 60 + 30))} />
+        </Reveal>
       ) : null}
     </View>
   );

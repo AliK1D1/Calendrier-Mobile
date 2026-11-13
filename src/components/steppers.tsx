@@ -2,7 +2,10 @@
  * Réglage d'une heure ou d'une date par petits pas (sans clavier) : la valeur au centre, les
  * boutons « moins » à gauche et « plus » à droite, dans une seule barre.
  */
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
+
+import { PressScale } from "@/components/motion";
+import { hapticSelect } from "@/services/haptics";
 
 import { space } from "@/theme/colors";
 import { ANDROID, shape, type } from "@/theme/tokens";
@@ -11,15 +14,20 @@ import { usePalette } from "@/theme/use-palette";
 function Step({ label, hint, onPress }: { label: string; hint: string; onPress: () => void }) {
   const c = usePalette();
   return (
-    <Pressable
+    <PressScale
       accessibilityRole="button"
       accessibilityLabel={hint}
-      onPress={onPress}
+      onPress={() => {
+        hapticSelect();
+        onPress();
+      }}
       android_ripple={{ color: c.text, foreground: true }}
-      style={({ pressed }) => [styles.step, { backgroundColor: c.card, opacity: pressed && !ANDROID ? 0.5 : 1 }]}
+      to={0.9}
+      dim={ANDROID ? 1 : 0.6}
+      style={[styles.step, { backgroundColor: c.card }]}
     >
       <Text style={[type.buttonSmall, { color: c.primary }]}>{label}</Text>
-    </Pressable>
+    </PressScale>
   );
 }
 

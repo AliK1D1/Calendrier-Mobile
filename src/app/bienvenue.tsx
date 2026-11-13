@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Text, View } from "react-native";
 
 import { AddressSearch } from "@/components/address-search";
+import { Swap } from "@/components/motion";
 import { Button, Card, Chip, ErrorText, Fill, Muted, Row, Screen } from "@/components/ui";
 import { completeOnboarding, skipOnboarding } from "@/features/settings";
 import type { GeocodeResult } from "@/lib/geocoding/nominatim";
@@ -63,6 +64,8 @@ export default function Bienvenue() {
             <View key={n} style={{ flex: 1, height: 5, borderRadius: 3, backgroundColor: n <= step ? c.primary : c.accent }} />
           ))}
         </View>
+        {/* Chaque question arrive en fondu. */}
+        <Swap key={step} style={{ gap: space.md }}>
         <View style={{ gap: 2 }}>
           <Text style={[type.footnote, { color: c.muted }]}>{to.stepOf(step + 1, 3)}</Text>
           <Text accessibilityRole="header" style={[type.title, { color: c.text }]}>{to.steps[step]}</Text>
@@ -81,6 +84,7 @@ export default function Bienvenue() {
             ))}
           </Row>
         ) : null}
+        </Swap>
         <ErrorText>{error}</ErrorText>
         <Row nowrap>
           {step > 0 ? (

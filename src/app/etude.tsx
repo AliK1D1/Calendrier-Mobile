@@ -5,6 +5,7 @@ import { Alert, ScrollView, StyleSheet, View } from "react-native";
 
 import { Toggle } from "@/components/toggle";
 
+import { Appear, Reveal } from "@/components/motion";
 import { CLOCK_STEPS, Stepper } from "@/components/steppers";
 import { Badge, Body, Button, Card, Chip, Divider, EmptyState, ErrorText, Field, Fill, Footnote, Heading, IconButton, Label, Loading, Meta, Muted, Notice, Row, Screen, Section, Segmented } from "@/components/ui";
 import { shiftClock } from "@/features/blocks";
@@ -133,6 +134,7 @@ export default function Etude() {
       ) : null}
 
       {plan ? (
+        <Reveal>
         <Card style={{ borderColor: c.primary, borderWidth: 2 }}>
           <Body bold>{plan.mode === "plan" ? ts.panel.titlePlan : ts.panel.titleReplan}</Body>
           {plan.warnings.map((w) => <Meta key={w} icon="alert" color={c.warning}>{w}</Meta>)}
@@ -158,15 +160,17 @@ export default function Etude() {
           ) : null}
           <Button label={ts.panel.refuseAll} variant="plain" size="small" disabled={busy} onPress={() => setPlan(null)} />
         </Card>
+        </Reveal>
       ) : null}
 
       <Section>
         <Heading>{ts.view.upcoming}</Heading>
         {data && upcoming.length === 0 ? <EmptyState icon="study" title={ts.view.noUpcoming} /> : null}
-        {upcoming.map((d) => {
+        {upcoming.map((d, i) => {
           const sessions = d.sessions.filter((s) => !s.past);
           return (
-            <Card key={d.id}>
+            <Appear key={d.id} index={i}>
+            <Card>
               <Row>
                 <Badge tone="primary">{ts.kinds[d.kind]}</Badge>
                 <Badge>{ts.difficulty[d.difficulty]}</Badge>
@@ -205,6 +209,7 @@ export default function Etude() {
                 }
               />
             </Card>
+            </Appear>
           );
         })}
       </Section>

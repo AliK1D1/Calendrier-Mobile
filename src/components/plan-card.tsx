@@ -3,6 +3,7 @@ import { Alert, View } from "react-native";
 
 import { AvatarStack } from "@/components/avatar";
 import { DateTile } from "@/components/date-tile";
+import { Appear } from "@/components/motion";
 import { Badge, Body, Button, Card, Divider, ErrorText, Fill, Meta, Muted, Row, type Tone } from "@/components/ui";
 import { dayOfInstant, namesSummary } from "@/features/display";
 import { cancelPlan, respondToPlan } from "@/features/actions";
@@ -17,7 +18,7 @@ const tp = t.plans;
 /**
  * Un plan : la date en étiquette, quoi, quand, où, qui y va, et mes boutons de réponse.
  */
-export function PlanCard({ plan, onChanged }: { plan: PlanView; onChanged: () => void }) {
+export function PlanCard({ plan, onChanged, index = 0 }: { plan: PlanView; onChanged: () => void; index?: number }) {
   const { supabase } = useAuthed();
   const c = usePalette();
   const [busy, setBusy] = useState<"yes" | "no" | "cancel" | null>(null);
@@ -82,6 +83,7 @@ export function PlanCard({ plan, onChanged }: { plan: PlanView; onChanged: () =>
   const canAnswer = plan.state === "upcoming" && plan.invited && !plan.isMine;
 
   return (
+    <Appear index={index}>
     <Card>
       <Row nowrap align="flex-start" gap={space.md}>
         <DateTile day={dayOfInstant(plan.startsAt)} dimmed={done} />
@@ -157,5 +159,6 @@ export function PlanCard({ plan, onChanged }: { plan: PlanView; onChanged: () =>
         </>
       ) : null}
     </Card>
+    </Appear>
   );
 }

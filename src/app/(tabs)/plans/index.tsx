@@ -34,7 +34,7 @@ export default function Plans() {
           <Heading count={count ? list.length : undefined}>{title}</Heading>
           {hint ? <Muted>{hint}</Muted> : null}
         </View>
-        {list.map((p) => <PlanCard key={p.id} plan={p} onChanged={() => void reload()} />)}
+        {list.map((p, i) => <PlanCard key={p.id} index={i} plan={p} onChanged={() => void reload()} />)}
       </Section>
     );
 

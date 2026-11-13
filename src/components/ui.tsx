@@ -9,7 +9,7 @@
  *   surface, pastilles de filtre avec coche, champs à contour, boutons segmentés.
  */
 import { Stack } from "expo-router";
-import type { ReactNode } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   type ColorValue,
@@ -23,9 +23,12 @@ import {
   View,
   type ViewStyle,
 } from "react-native";
+import Animated, { ReduceMotion, useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Icon, type IconName } from "@/components/icon";
+import { Appear, PressScale, Reveal } from "@/components/motion";
+import { hapticSelect, hapticSuccess } from "@/services/haptics";
 import { radius, space } from "@/theme/colors";
 import { ANDROID, IOS, pick, shape, strong, touch, type } from "@/theme/tokens";
 import { usePalette } from "@/theme/use-palette";
@@ -161,27 +164,39 @@ export function ErrorText({ children }: { children: ReactNode }) {
   const c = usePalette();
   if (!children) return null;
   return (
-    <View accessibilityRole="alert" style={styles.inline}>
-      <View style={styles.inlineIcon}>
-        <Icon name="alert" size={16} color={c.danger} />
+    <Reveal>
+      <View accessibilityRole="alert" style={styles.inline}>
+        <View style={styles.inlineIcon}>
+          <Icon name="alert" size={16} color={c.danger} />
+        </View>
+        <Text style={[type.subhead, { color: c.danger, flex: 1 }]}>{children}</Text>
       </View>
-      <Text style={[type.subhead, { color: c.danger, flex: 1 }]}>{children}</Text>
-    </View>
+    </Reveal>
   );
 }
 
 /** Message après une action réussie (« Plan envoyé »), ou une information à remarquer. */
 export function Notice({ children, tone = "success" }: { children: ReactNode; tone?: "success" | "info" | "warning" }) {
-  const c = usePalette();
   if (!children) return null;
+  // Nouveau message = nouvel élément : il se glisse en place (et vibre s'il annonce une réussite).
+  return <NoticeBody key={typeof children === "string" ? children : undefined} tone={tone}>{children}</NoticeBody>;
+}
+
+function NoticeBody({ children, tone }: { children: ReactNode; tone: "success" | "info" | "warning" }) {
+  const c = usePalette();
+  useEffect(() => {
+    if (tone === "success") hapticSuccess();
+  }, [tone]);
   const color = tone === "success" ? c.success : tone === "warning" ? c.warning : c.primary;
   return (
-    <View accessibilityRole="alert" accessibilityLiveRegion="polite" style={[styles.notice, { backgroundColor: c.card }]}>
-      <View style={styles.inlineIcon}>
-        <Icon name={tone === "success" ? "checkCircle" : tone === "warning" ? "alert" : "info"} size={18} color={color} />
+    <Reveal>
+      <View accessibilityRole="alert" accessibilityLiveRegion="polite" style={[styles.notice, { backgroundColor: c.card }]}>
+        <View style={styles.inlineIcon}>
+          <Icon name={tone === "success" ? "checkCircle" : tone === "warning" ? "alert" : "info"} size={18} color={color} />
+        </View>
+        <Text style={[type.subhead, strong, { color: c.text, flex: 1 }]}>{children}</Text>
       </View>
-      <Text style={[type.subhead, strong, { color: c.text, flex: 1 }]}>{children}</Text>
-    </View>
+    </Reveal>
   );
 }
 
@@ -206,15 +221,17 @@ export function Card({
   const look = [styles.card, { backgroundColor: tone === "accent" ? c.accent : c.card }, style];
   if (!onPress) return <View style={look}>{children}</View>;
   return (
-    <Pressable
+    <PressScale
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
       onPress={onPress}
       android_ripple={{ color: c.border, foreground: true }}
-      style={({ pressed }) => [look, { opacity: pressed && !ANDROID ? 0.6 : 1 }]}
+      to={0.96}
+      dim={ANDROID ? 1 : 0.75}
+      style={look}
     >
       {children}
-    </Pressable>
+    </PressScale>
   );
 }
 
@@ -276,23 +293,25 @@ export function Button({
   const off = disabled || busy;
   const small = size === "small";
   return (
-    <Pressable
+    // Désactivé : un View autour porte l'opacité (l'animation gère celle du bouton pressé).
+    <View style={off ? styles.off : null}>
+    <PressScale
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityState={{ disabled: off, busy }}
       disabled={off}
       onPress={onPress}
       android_ripple={{ color: fg, foreground: true }}
-      style={({ pressed }) => [
-        small ? styles.buttonSmall : styles.button,
-        { backgroundColor: bg, opacity: off ? 0.45 : pressed && !ANDROID ? 0.65 : 1 },
-      ]}
+      to={0.97}
+      dim={ANDROID ? 1 : 0.7}
+      style={[small ? styles.buttonSmall : styles.button, { backgroundColor: bg }]}
     >
       {busy ? <ActivityIndicator color={fg} size="small" /> : icon ? <Icon name={icon} size={small ? 16 : 18} color={fg} /> : null}
       <Text numberOfLines={1} style={[small ? type.buttonSmall : type.button, { color: fg, flexShrink: 1 }]}>
         {label}
       </Text>
-    </Pressable>
+    </PressScale>
+    </View>
   );
 }
 
@@ -312,21 +331,22 @@ export function IconButton({
 }) {
   const c = usePalette();
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      accessibilityState={{ disabled }}
-      disabled={disabled}
-      onPress={onPress}
-      hitSlop={4}
-      android_ripple={{ color: c.border, borderless: true, radius: 22 }}
-      style={({ pressed }) => [
-        styles.iconButton,
-        { backgroundColor: filled ? c.accent : "transparent", opacity: disabled ? 0.35 : pressed && !ANDROID ? 0.5 : 1 },
-      ]}
-    >
-      <Icon name={icon} size={20} color={filled ? c.accentText : c.primary} />
-    </Pressable>
+    <View style={disabled ? styles.off : null}>
+      <PressScale
+        accessibilityRole="button"
+        accessibilityLabel={label}
+        accessibilityState={{ disabled }}
+        disabled={disabled}
+        onPress={onPress}
+        hitSlop={4}
+        android_ripple={{ color: c.border, borderless: true, radius: 22 }}
+        to={0.86}
+        dim={ANDROID ? 1 : 0.6}
+        style={[styles.iconButton, { backgroundColor: filled ? c.accent : "transparent" }]}
+      >
+        <Icon name={icon} size={20} color={filled ? c.accentText : c.primary} />
+      </PressScale>
+    </View>
   );
 }
 
@@ -378,7 +398,7 @@ export function EmptyState({
 }) {
   const c = usePalette();
   return (
-    <View style={[styles.empty, { backgroundColor: c.card }]}>
+    <Appear style={[styles.empty, { backgroundColor: c.card }]}>
       <View style={[styles.emptyIcon, { backgroundColor: c.accent }]}>
         <Icon name={icon} size={26} color={c.accentText} />
       </View>
@@ -389,7 +409,7 @@ export function EmptyState({
           <Button label={action.label} icon={action.icon} size="small" variant="secondary" onPress={action.onPress} />
         </View>
       ) : null}
-    </View>
+    </Appear>
   );
 }
 
@@ -462,22 +482,24 @@ export function Chip({
     ? { bg: selected ? c.primary : c.accent, border: "transparent" as ColorValue, fg: selected ? c.primaryText : c.text }
     : { bg: selected ? c.accent : ("transparent" as ColorValue), border: selected ? c.accent : c.border, fg: selected ? c.accentText : c.muted };
   return (
-    <Pressable
+    <PressScale
       accessibilityRole={ANDROID ? "checkbox" : "button"}
       accessibilityState={ANDROID ? { checked: selected } : { selected }}
-      onPress={onPress}
+      onPress={() => {
+        hapticSelect();
+        onPress();
+      }}
       android_ripple={{ color: c.text, foreground: true }}
-      style={({ pressed }) => [
-        chipStyles.chip,
-        { backgroundColor: colors.bg, borderColor: colors.border, opacity: pressed && !ANDROID ? 0.7 : 1 },
-      ]}
+      to={0.94}
+      dim={ANDROID ? 1 : 0.8}
+      style={[chipStyles.chip, { backgroundColor: colors.bg, borderColor: colors.border }]}
     >
       <View style={chipStyles.inner}>
         {ANDROID && selected ? <Icon name="check" size={16} color={colors.fg} /> : null}
         {swatch ? <View style={[chipStyles.swatch, { backgroundColor: swatch, borderColor: c.border }]} /> : null}
         <Text style={[type.buttonSmall, IOS ? { fontWeight: "500" } : null, { color: colors.fg }]}>{label}</Text>
       </View>
-    </Pressable>
+    </PressScale>
   );
 }
 
@@ -497,12 +519,25 @@ export function Segmented<T extends string>({
   accessibilityLabel?: string;
 }) {
   const c = usePalette();
+  // iPhone : la pastille blanche glisse d'un segment à l'autre, comme le contrôle d'Apple.
+  const [width, setWidth] = useState(0);
+  const index = Math.max(0, options.findIndex((o) => o.value === value));
+  const segment = width > 0 ? (width - 4) / options.length : 0;
+  const x = useSharedValue(0);
+  useEffect(() => {
+    x.value = withSpring(index * segment, { damping: 22, stiffness: 260, mass: 0.7, reduceMotion: ReduceMotion.System });
+  }, [index, segment, x]);
+  const thumb = useAnimatedStyle(() => ({ transform: [{ translateX: x.value }] }));
   return (
     <View
       accessibilityRole="radiogroup"
       accessibilityLabel={accessibilityLabel}
+      onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
       style={[segStyles.track, IOS ? { backgroundColor: c.accent } : { borderColor: c.muted }]}
     >
+      {IOS && segment > 0 ? (
+        <Animated.View style={[segStyles.thumb, segStyles.slider, { width: segment, backgroundColor: c.card }, thumb]} />
+      ) : null}
       {options.map((o, i) => {
         const on = o.value === value;
         return (
@@ -510,12 +545,15 @@ export function Segmented<T extends string>({
             key={o.value}
             accessibilityRole="radio"
             accessibilityState={{ selected: on, checked: on }}
-            onPress={() => onChange(o.value)}
+            onPress={() => {
+              if (!on) hapticSelect();
+              onChange(o.value);
+            }}
             android_ripple={{ color: c.text, foreground: true }}
             style={[
               segStyles.item,
               IOS
-                ? on ? [segStyles.thumb, { backgroundColor: c.card }] : null
+                ? null
                 : { backgroundColor: on ? c.accent : "transparent", borderLeftWidth: i === 0 ? 0 : 1, borderColor: c.muted },
             ]}
           >
@@ -563,6 +601,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   dot: { width: 7, height: 7, borderRadius: 4 },
+  off: { opacity: 0.45 },
   button: {
     minHeight: pick({ ios: 50, android: 48 }),
     borderRadius: pick({ ios: 14, android: radius.pill }),
@@ -613,6 +652,7 @@ const segStyles = StyleSheet.create({
     android: { flexDirection: "row", borderRadius: radius.pill, borderWidth: 1, minHeight: 40, overflow: "hidden" },
   }),
   item: { flex: 1, flexDirection: "row", gap: space.xs, alignItems: "center", justifyContent: "center", paddingHorizontal: space.sm, overflow: "hidden" },
+  slider: { position: "absolute", top: 2, bottom: 2, left: 2 },
   thumb: {
     borderRadius: 7,
     shadowColor: "#000",

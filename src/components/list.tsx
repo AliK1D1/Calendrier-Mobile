@@ -4,9 +4,10 @@
  * Material 3 (icône simple, rangées de 56 dp).
  */
 import { Children, type ReactNode } from "react";
-import { type ColorValue, Pressable, StyleSheet, Text, View } from "react-native";
+import { type ColorValue, StyleSheet, Text, View } from "react-native";
 
 import { Icon, type IconName } from "@/components/icon";
+import { PressScale } from "@/components/motion";
 import { space } from "@/theme/colors";
 import { ANDROID, IOS, pick, shape, type } from "@/theme/tokens";
 import { usePalette } from "@/theme/use-palette";
@@ -92,15 +93,16 @@ export function ListRow({
   );
   if (!onPress) return content;
   return (
-    <Pressable
+    <PressScale
       accessibilityRole="button"
       accessibilityHint={accessibilityHint}
       onPress={onPress}
       android_ripple={{ color: c.border }}
-      style={({ pressed }) => ({ opacity: pressed && !ANDROID ? 0.5 : 1 })}
+      to={1}
+      dim={ANDROID ? 1 : 0.5}
     >
       {content}
-    </Pressable>
+    </PressScale>
   );
 }
 
