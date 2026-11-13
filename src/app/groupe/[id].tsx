@@ -6,7 +6,9 @@ import { Avatar, AvatarStack } from "@/components/avatar";
 import { icons } from "@/components/icons";
 import { ListGroup, ListRow } from "@/components/list";
 
+import { FreeNow } from "@/components/free-now";
 import { MeetupFinder } from "@/components/meetup-finder";
+import { PlaceMap } from "@/components/place-map";
 import { ProposeSheet } from "@/components/propose-sheet";
 
 import { PlanCard } from "@/components/plan-card";
@@ -20,7 +22,8 @@ import { locale, t } from "@/services/i18n";
 import { useAuthed } from "@/services/session";
 import { SITE_URL } from "@/services/site";
 import { useLoad } from "@/services/use-load";
-import { draftFromProposal, type ProposeDraft } from "@/features/propose";
+import { draftFromFreeNow, draftFromProposal, type ProposeDraft } from "@/features/propose";
+import type { FreeNowMatchView } from "@/lib/meetups/freeNow";
 import { space } from "@/theme/colors";
 
 const tg = t.groups;
@@ -55,6 +58,20 @@ export default function Groupe() {
         groupId: group.id,
         memberIds: group.members.map((m) => m.userId),
         participantIds,
+        defaultTitle: t.plans.defaultTitle,
+        callTitle: tg.callTitle,
+        callLocation: tg.callLocation,
+      }),
+    );
+  }
+
+  function proposeFromFreeNow(m: FreeNowMatchView) {
+    if (!group) return;
+    setExtraPlace(m.placeId && m.placeName ? { id: m.placeId, name: m.placeName } : null);
+    setDraft(
+      draftFromFreeNow(m, {
+        groupId: group.id,
+        userId,
         defaultTitle: t.plans.defaultTitle,
         callTitle: tg.callTitle,
         callLocation: tg.callLocation,
@@ -137,7 +154,15 @@ export default function Groupe() {
             {!alone ? (
               <Section>
                 <Heading>{t.meetups.title}</Heading>
+                <FreeNow groupId={group.id} onPropose={proposeFromFreeNow} />
                 <MeetupFinder groupId={group.id} members={group.members} onPropose={proposeFromSlot} />
+              </Section>
+            ) : null}
+
+            {Platform.OS === "ios" && group.favorites.length > 0 ? (
+              <Section>
+                <Heading>{tg.favoritesTitle}</Heading>
+                <PlaceMap points={group.favorites.map((f) => ({ id: f.id, lat: f.lat, lng: f.lng, label: f.name }))} />
               </Section>
             ) : null}
 

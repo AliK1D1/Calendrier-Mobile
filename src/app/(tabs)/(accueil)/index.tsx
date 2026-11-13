@@ -5,6 +5,7 @@ import { StyleSheet, Text, View } from "react-native";
 import { Icon, type IconName } from "@/components/icon";
 import { PlanCard } from "@/components/plan-card";
 import { Body, Button, Card, EmptyState, ErrorText, Heading, Loading, Muted, Row, Screen, Section } from "@/components/ui";
+import { FreeNow } from "@/components/free-now";
 import { Tip } from "@/components/tip";
 import { dayLabelFr } from "@/features/agenda";
 import { loadPlans } from "@/lib/plans/queries";
@@ -80,6 +81,8 @@ export default function Accueil() {
         <Shortcut icon="calendar" label={t.schedule.title} href="/horaire" />
         <Shortcut icon="study" label="Étude" href="/etude" />
       </Row>
+
+      {data && data.onboarded !== false ? <FreeNow /> : null}
 
       {data && data.plans.awaiting.length > 0 ? (
         <Section>
