@@ -15,16 +15,19 @@ export function PlaceMap({
   points,
   onPick,
   height = 220,
+  frameKey,
 }: {
   points: MapPoint[];
   onPick?: (lat: number, lng: number) => void;
   height?: number;
+  /** La carte se recadre quand cette clé change (défaut : quand les points changent). */
+  frameKey?: string;
 }) {
   const c = usePalette();
   const scheme = useScheme();
   const camera = cameraFor(points);
   // La carte se recentre quand l'ensemble des points change (clé), pas à chaque rendu.
-  const key = points.map((p) => `${p.id}:${p.lat.toFixed(4)},${p.lng.toFixed(4)}`).join("|");
+  const key = frameKey ?? points.map((p) => `${p.id}:${p.lat.toFixed(4)},${p.lng.toFixed(4)}`).join("|");
   return (
     <View
       accessible

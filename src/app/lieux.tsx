@@ -160,7 +160,7 @@ export default function Lieux() {
           {picked ? (
             <>
               {/* iPhone : toucher la carte pour placer le point exactement (entrée du cégep…). */}
-              <PlaceMap points={mapPoints.filter((p) => p.id === "nouveau")} height={180} onPick={(lat, lng) => setPicked({ ...picked, lat, lng })} />
+              <PlaceMap points={mapPoints.filter((p) => p.id === "nouveau")} height={180} frameKey={picked.id} onPick={(lat, lng) => setPicked({ ...picked, lat, lng })} />
               <Field label={tl.placeName} value={name} onChangeText={setName} maxLength={100} />
               <Row nowrap>
                 <Fill>

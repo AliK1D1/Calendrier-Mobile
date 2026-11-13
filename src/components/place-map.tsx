@@ -4,6 +4,6 @@
  */
 import type { MapPoint } from "@/features/map";
 
-export function PlaceMap(_props: { points: MapPoint[]; onPick?: (lat: number, lng: number) => void; height?: number }) {
+export function PlaceMap(_props: { points: MapPoint[]; onPick?: (lat: number, lng: number) => void; height?: number; frameKey?: string }) {
   return null;
 }
