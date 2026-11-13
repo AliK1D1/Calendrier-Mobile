@@ -2,6 +2,9 @@ import { Stack, ThemeProvider } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
+
+import { ToastProvider } from "@/components/toast";
 
 import { SessionProvider, useSession } from "@/services/session";
 import { useNotifications } from "@/services/use-notifications";
@@ -30,6 +33,7 @@ function RootStack() {
 
   return (
     <ThemeProvider value={theme}>
+      <ToastProvider>
       <StatusBar style={scheme === "dark" ? "light" : "dark"} />
       <Stack screenOptions={headerOptions(c)}>
         <Stack.Protected guard={signedIn}>
@@ -44,14 +48,18 @@ function RootStack() {
           <Stack.Screen name="inscription" options={{ title: "Créer un compte" }} />
         </Stack.Protected>
       </Stack>
+      </ToastProvider>
     </ThemeProvider>
   );
 }
 
 export default function RootLayout() {
   return (
-    <SessionProvider>
-      <RootStack />
-    </SessionProvider>
+    // Racine des gestes (glisser une ligne pour voir ses actions).
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SessionProvider>
+        <RootStack />
+      </SessionProvider>
+    </GestureHandlerRootView>
   );
 }

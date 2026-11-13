@@ -13,7 +13,7 @@ import { nextDays, type ProposeDraft, proposeMoment, type RepeatChoice, repeatOf
 import { formatDuration } from "@/lib/i18n/format";
 import { PLAN_DURATIONS } from "@/lib/plans/validation";
 import { TIME_ZONE } from "@/lib/scheduling/time";
-import { formatClockFr, parseClock } from "@/lib/scheduling/weeklyBlocks";
+import { formatClock, formatClockFr, parseClock } from "@/lib/scheduling/weeklyBlocks";
 import { locale, t } from "@/services/i18n";
 import { useAuthed } from "@/services/session";
 import { space } from "@/theme/colors";
@@ -89,6 +89,7 @@ export function ProposeSheet({
         value={formatClockFr(startMin)}
         steps={CLOCK_STEPS}
         onShift={(by) => set({ start: shiftStart(form.start, by / 15) })}
+        picker={{ mode: "time", minutes: startMin, step: 15, min: 0, max: 24 * 60 - 15, onPick: (m) => set({ start: formatClock(m) }) }}
       />
 
       <View style={{ gap: space.sm }}>

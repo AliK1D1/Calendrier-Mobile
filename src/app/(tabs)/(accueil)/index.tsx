@@ -5,6 +5,7 @@ import { StyleSheet, Text, View } from "react-native";
 import { Icon, type IconName } from "@/components/icon";
 import { PlanCard } from "@/components/plan-card";
 import { Body, Button, Card, EmptyState, ErrorText, Heading, Loading, Muted, Row, Screen, Section } from "@/components/ui";
+import { Tip } from "@/components/tip";
 import { dayLabelFr } from "@/features/agenda";
 import { loadPlans } from "@/lib/plans/queries";
 import { TIME_ZONE } from "@/lib/scheduling/time";
@@ -86,6 +87,7 @@ export default function Accueil() {
             <Heading>{t.home.plans.awaiting(data.plans.awaiting.length)}</Heading>
             <Muted>{t.home.plans.awaitingHint}</Muted>
           </View>
+          <Tip id="swipePlan" />
           {data.plans.awaiting.map((p, i) => <PlanCard key={p.id} index={i} plan={p} onChanged={() => void reload()} />)}
         </Section>
       ) : null}
