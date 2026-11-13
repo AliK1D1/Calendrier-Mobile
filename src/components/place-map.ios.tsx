@@ -6,7 +6,7 @@
 import { AppleMaps } from "expo-maps";
 import { StyleSheet, View } from "react-native";
 
-import { cameraFor, type MapPoint, pickedPoint } from "@/features/map";
+import { cameraFor, MARKER_GRAY, type MapPoint, markerTint, pickedPoint } from "@/features/map";
 import { hapticSelect } from "@/services/haptics";
 import { shape } from "@/theme/tokens";
 import { usePalette, useScheme } from "@/theme/use-palette";
@@ -42,7 +42,8 @@ export function PlaceMap({
           title: p.label,
           coordinates: { latitude: p.lat, longitude: p.lng },
           systemImage: p.highlighted ? "star.fill" : "mappin",
-          tintColor: String(p.highlighted ? c.primary : c.muted),
+          // Texte #hex obligatoire : les couleurs système d'iOS sont des objets (repère invisible).
+          tintColor: p.highlighted ? markerTint(c.primary, "#2c5fa9") : MARKER_GRAY,
         }))}
         onMapClick={
           onPick
