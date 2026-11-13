@@ -4,6 +4,7 @@ import { ActionSheetIOS, Alert, Platform } from "react-native";
 import { AddressSearch } from "@/components/address-search";
 import { ListGroup, ListRow } from "@/components/list";
 import { Reveal } from "@/components/motion";
+import { PlaceMap } from "@/components/place-map";
 import { useToast } from "@/components/toast";
 import { Toggle } from "@/components/toggle";
 import { Badge, Button, Card, EmptyState, ErrorText, Field, Fill, Heading, Label, Loading, Row, Screen, Section } from "@/components/ui";
@@ -11,6 +12,7 @@ import { addPlace, deletePlace, renamePlace, setHome } from "@/features/settings
 import type { GeocodeResult } from "@/lib/geocoding/nominatim";
 import { getMyPlaces, getMyProfile } from "@/lib/profile";
 import { toggled, withoutHidden } from "@/features/undo";
+import type { MapPoint } from "@/features/map";
 import { t } from "@/services/i18n";
 import { useAuthed } from "@/services/session";
 import { useLoad } from "@/services/use-load";
@@ -96,12 +98,25 @@ export default function Lieux() {
     ]);
   }
 
+  // Carte (iPhone) : mes lieux, la maison en évidence, et l'adresse choisie à ajouter.
+  const mapPoints: MapPoint[] = [
+    ...withoutHidden(data?.places ?? [], hidden, (p) => p.id).map((p) => ({
+      id: p.id,
+      lat: p.lat,
+      lng: p.lng,
+      label: p.id === data?.homeId ? tl.homeSuffix(p.name) : p.name,
+      highlighted: !picked && p.id === data?.homeId,
+    })),
+    ...(picked ? [{ id: "nouveau", lat: picked.lat, lng: picked.lng, label: name.trim() || picked.name, highlighted: true }] : []),
+  ];
+
   return (
     <Screen edges={[]} subtitle={tl.intro}>
       <ErrorText>{actionError}</ErrorText>
       <ErrorText>{error}</ErrorText>
       {!data && !error ? <Loading kind="list" /> : null}
       {data && withoutHidden(data.places, hidden, (p) => p.id).length === 0 ? <EmptyState icon="pin" title={tl.none} text="Ajoute ta maison et ton cégep plus bas : ils servent à calculer tes trajets vers les plans." /> : null}
+      {data && mapPoints.length > 0 ? <PlaceMap points={mapPoints} /> : null}
       {data && withoutHidden(data.places, hidden, (p) => p.id).length > 0 ? (
         <ListGroup footer="Touche un lieu pour le choisir comme maison ou le renommer. Glisse-le vers la gauche pour le supprimer.">
           {withoutHidden(data.places, hidden, (p) => p.id).map((p) => {
@@ -144,6 +159,8 @@ export default function Lieux() {
           <AddressSearch label={tl.searchLabel} selected={picked} onSelect={(r) => { setPicked(r); setName(r.name); }} />
           {picked ? (
             <>
+              {/* iPhone : toucher la carte pour placer le point exactement (entrée du cégep…). */}
+              <PlaceMap points={mapPoints.filter((p) => p.id === "nouveau")} height={180} onPick={(lat, lng) => setPicked({ ...picked, lat, lng })} />
               <Field label={tl.placeName} value={name} onChangeText={setName} maxLength={100} />
               <Row nowrap>
                 <Fill>

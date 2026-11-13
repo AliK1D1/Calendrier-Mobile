@@ -5,6 +5,7 @@ import { Text, View } from "react-native";
 import { AddressSearch } from "@/components/address-search";
 import { Swap } from "@/components/motion";
 import { Button, Card, Chip, ErrorText, Fill, Muted, Row, Screen } from "@/components/ui";
+import { PlaceMap } from "@/components/place-map";
 import { completeOnboarding, skipOnboarding } from "@/features/settings";
 import type { GeocodeResult } from "@/lib/geocoding/nominatim";
 import { TRAVEL_MODE_LABELS, TRAVEL_MODES } from "@/lib/places/validation";
@@ -72,10 +73,20 @@ export default function Bienvenue() {
           <Muted>{to.stepHints[step]}</Muted>
         </View>
         {step === 0 ? (
-          <AddressSearch label={to.homeLabel} placeholder={to.homePlaceholder} selected={home} onSelect={setHome} />
+          <>
+            <AddressSearch label={to.homeLabel} placeholder={to.homePlaceholder} selected={home} onSelect={setHome} />
+            {home ? (
+              <PlaceMap height={180} points={[{ id: "maison", lat: home.lat, lng: home.lng, label: to.homeDefaultName, highlighted: true }]} onPick={(lat, lng) => setHome({ ...home, lat, lng })} />
+            ) : null}
+          </>
         ) : null}
         {step === 1 ? (
-          <AddressSearch label={to.schoolLabel} placeholder={to.schoolPlaceholder} selected={school} onSelect={setSchool} />
+          <>
+            <AddressSearch label={to.schoolLabel} placeholder={to.schoolPlaceholder} selected={school} onSelect={setSchool} />
+            {school ? (
+              <PlaceMap height={180} points={[{ id: "ecole", lat: school.lat, lng: school.lng, label: school.name, highlighted: true }]} onPick={(lat, lng) => setSchool({ ...school, lat, lng })} />
+            ) : null}
+          </>
         ) : null}
         {step === 2 ? (
           <Row>
