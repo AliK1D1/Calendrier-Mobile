@@ -49,3 +49,14 @@ export function pickedPoint(lat: number | undefined, lng: number | undefined): {
   const round = (n: number) => Math.round(n * 1e6) / 1e6;
   return { lat: round(lat), lng: round(lng) };
 }
+
+/** Gris des repères ordinaires (systemGray d'Apple, lisible en clair comme en sombre). */
+export const MARKER_GRAY = "#8e8e93";
+
+/**
+ * Couleur d'un repère : la carte veut un texte « #rrggbb ». Les couleurs système d'iOS
+ * (`Color.ios.*`) sont des objets, pas du texte : on prend alors `fallback`.
+ */
+export function markerTint(color: unknown, fallback: string): string {
+  return typeof color === "string" && /^#[0-9a-f]{3,8}$/i.test(color) ? color : fallback;
+}

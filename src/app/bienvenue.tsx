@@ -76,7 +76,7 @@ export default function Bienvenue() {
           <>
             <AddressSearch label={to.homeLabel} placeholder={to.homePlaceholder} selected={home} onSelect={setHome} />
             {home ? (
-              <PlaceMap height={180} points={[{ id: "maison", lat: home.lat, lng: home.lng, label: to.homeDefaultName, highlighted: true }]} onPick={(lat, lng) => setHome({ ...home, lat, lng })} />
+              <PlaceMap height={180} frameKey={home.id} points={[{ id: "maison", lat: home.lat, lng: home.lng, label: to.homeDefaultName, highlighted: true }]} onPick={(lat, lng) => setHome({ ...home, lat, lng })} />
             ) : null}
           </>
         ) : null}
@@ -84,7 +84,7 @@ export default function Bienvenue() {
           <>
             <AddressSearch label={to.schoolLabel} placeholder={to.schoolPlaceholder} selected={school} onSelect={setSchool} />
             {school ? (
-              <PlaceMap height={180} points={[{ id: "ecole", lat: school.lat, lng: school.lng, label: school.name, highlighted: true }]} onPick={(lat, lng) => setSchool({ ...school, lat, lng })} />
+              <PlaceMap height={180} frameKey={school.id} points={[{ id: "ecole", lat: school.lat, lng: school.lng, label: school.name, highlighted: true }]} onPick={(lat, lng) => setSchool({ ...school, lat, lng })} />
             ) : null}
           </>
         ) : null}

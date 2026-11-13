@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { cameraFor, DEFAULT_CENTER, pickedPoint, SINGLE_ZOOM } from "../map";
+import { cameraFor, DEFAULT_CENTER, MARKER_GRAY, markerTint, pickedPoint, SINGLE_ZOOM } from "../map";
 
 describe("cameraFor", () => {
   it("aucun point : Montréal", () => {
@@ -31,5 +31,16 @@ describe("pickedPoint", () => {
     expect(pickedPoint(undefined, 1)).toBeNull();
     expect(pickedPoint(91, 0)).toBeNull();
     expect(pickedPoint(0, Number.NaN)).toBeNull();
+  });
+});
+
+describe("markerTint", () => {
+  it("garde une couleur #hex", () => {
+    expect(markerTint("#2c5fa9", MARKER_GRAY)).toBe("#2c5fa9");
+  });
+  it("couleur système d'iOS (objet) ou texte invalide : la couleur de secours", () => {
+    expect(markerTint({ semantic: ["secondaryLabel"] }, MARKER_GRAY)).toBe(MARKER_GRAY);
+    expect(markerTint("[object Object]", MARKER_GRAY)).toBe(MARKER_GRAY);
+    expect(markerTint(undefined, "#000000")).toBe("#000000");
   });
 });

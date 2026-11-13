@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { MOBILE_USER_AGENT, searchAddress } from "../geocode";
+import { buildReverseUrl, MOBILE_USER_AGENT, parseReverse, reverseName, searchAddress } from "../geocode";
 
 const answer = [
   {
@@ -43,5 +43,43 @@ describe("searchAddress", () => {
     const down = vi.fn(async () => ({ ok: false, status: 503, json: async () => null }));
     const r = await searchAddress("rue Ontario", { fetch: down, wait: async () => {} });
     expect(r).toMatchObject({ ok: false });
+  });
+});
+
+describe("géocodage inverse (point touché sur la carte)", () => {
+  it("lien Nominatim en français, 6 décimales", () => {
+    const url = buildReverseUrl(45.5231234567, -73.6);
+    expect(url).toContain("https://nominatim.openstreetmap.org/reverse?");
+    expect(url).toContain("lat=45.523123");
+    expect(url).toContain("lon=-73.600000");
+    expect(url).toContain("accept-language=fr");
+  });
+  it("nom du lieu d'abord", () => {
+    expect(parseReverse({ name: " Café Olimpico ", address: { road: "rue Saint-Viateur" } })).toBe("Café Olimpico");
+  });
+  it("sinon le type de lieu, puis numéro et rue", () => {
+    expect(parseReverse({ name: "", address: { leisure: "Parc Jarry" } })).toBe("Parc Jarry");
+    expect(parseReverse({ address: { house_number: "124", road: "rue Saint-Viateur O" } })).toBe("124 rue Saint-Viateur O");
+    expect(parseReverse({ address: { road: "rue Saint-Denis" } })).toBe("rue Saint-Denis");
+  });
+  it("rien d'utile : null", () => {
+    expect(parseReverse({ error: "Unable to geocode" })).toBeNull();
+    expect(parseReverse(null)).toBeNull();
+  });
+  it("reverseName : réponse lue, puis gardée en cache", async () => {
+    let calls = 0;
+    const fetch = async () => {
+      calls++;
+      return { ok: true, status: 200, json: async () => ({ name: "Parc La Fontaine" }) };
+    };
+    const deps = { fetch, now: () => 1e12, wait: async () => {} };
+    expect(await reverseName(45.527, -73.569, deps)).toBe("Parc La Fontaine");
+    expect(await reverseName(45.527, -73.569, deps)).toBe("Parc La Fontaine");
+    expect(calls).toBe(1);
+  });
+  it("reverseName : erreur réseau ou réponse refusée : null", async () => {
+    const deps = { now: () => 2e12, wait: async () => {} };
+    expect(await reverseName(1, 2, { ...deps, fetch: async () => { throw new Error("x"); } })).toBeNull();
+    expect(await reverseName(3, 4, { ...deps, fetch: async () => ({ ok: false, status: 429, json: async () => ({}) }) })).toBeNull();
   });
 });
