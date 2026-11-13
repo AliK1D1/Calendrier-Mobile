@@ -5,6 +5,7 @@
   "dependencies": {
     "@expo/material-symbols": "^0.1.1",
     "@expo/ui": "~58.0.28",
+    "@react-native-community/datetimepicker": "9.2.1",
     "@supabase/supabase-js": "^2.119.0",
     "date-fns": "^4.4.0",
     "date-fns-tz": "^3.2.0",

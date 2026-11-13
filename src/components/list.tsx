@@ -8,6 +8,7 @@ import { type ColorValue, StyleSheet, Text, View } from "react-native";
 
 import { Icon, type IconName } from "@/components/icon";
 import { PressScale } from "@/components/motion";
+import { type SwipeAction, SwipeRow } from "@/components/swipe";
 import { space } from "@/theme/colors";
 import { ANDROID, IOS, pick, shape, type } from "@/theme/tokens";
 import { usePalette } from "@/theme/use-palette";
@@ -52,6 +53,7 @@ export function ListRow({
   chevron,
   destructive,
   accessibilityHint,
+  swipe,
 }: {
   title: string;
   subtitle?: string;
@@ -66,6 +68,8 @@ export function ListRow({
   chevron?: boolean;
   destructive?: boolean;
   accessibilityHint?: string;
+  /** Actions qu'on voit en glissant la rangée vers la gauche (ex. Supprimer). */
+  swipe?: SwipeAction[];
 }) {
   const c = usePalette();
   const tint = destructive ? c.danger : (iconColor ?? c.primary);
@@ -91,8 +95,7 @@ export function ListRow({
       {showChevron ? <Icon name="chevron" size={IOS ? 14 : 20} color={c.muted} /> : null}
     </View>
   );
-  if (!onPress) return content;
-  return (
+  const row = !onPress ? content : (
     <PressScale
       accessibilityRole="button"
       accessibilityHint={accessibilityHint}
@@ -103,6 +106,12 @@ export function ListRow({
     >
       {content}
     </PressScale>
+  );
+  if (!swipe?.length) return row;
+  return (
+    <SwipeRow trailing={swipe}>
+      <View style={{ backgroundColor: c.card }}>{row}</View>
+    </SwipeRow>
   );
 }
 

@@ -1,14 +1,16 @@
 import { formatInTimeZone } from "date-fns-tz";
 import { router } from "expo-router";
 import { useState } from "react";
-import { Alert, ScrollView, StyleSheet, View } from "react-native";
+import { ScrollView, StyleSheet, View } from "react-native";
 
 import { Toggle } from "@/components/toggle";
 
 import { Appear, Reveal } from "@/components/motion";
 import { CLOCK_STEPS, Stepper } from "@/components/steppers";
+import { useToast } from "@/components/toast";
 import { Badge, Body, Button, Card, Chip, Divider, EmptyState, ErrorText, Field, Fill, Footnote, Heading, IconButton, Label, Loading, Meta, Muted, Notice, Row, Screen, Section, Segmented } from "@/components/ui";
 import { shiftClock } from "@/features/blocks";
+import { toggled, withoutHidden } from "@/features/undo";
 import { nextDays } from "@/features/propose";
 import {
   acceptSessions,
@@ -23,7 +25,7 @@ import {
 import { formatDuration } from "@/lib/i18n/format";
 import type { StudyPlanView } from "@/lib/study/service";
 import { TIME_ZONE } from "@/lib/scheduling/time";
-import { formatClockFr, parseClock } from "@/lib/scheduling/weeklyBlocks";
+import { formatClock, formatClockFr, parseClock } from "@/lib/scheduling/weeklyBlocks";
 import { locale, t } from "@/services/i18n";
 import { useAuthed } from "@/services/session";
 import { useLoad } from "@/services/use-load";
@@ -47,6 +49,9 @@ export default function Etude() {
   const [chosen, setChosen] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [flash, setFlash] = useState<string | null>(null);
+  // Échéances supprimées dont « Annuler » est encore proposé : cachées en attendant.
+  const [hidden, setHidden] = useState<ReadonlySet<string>>(new Set());
+  const toast = useToast();
   const [actionError, setActionError] = useState<string | null>(null);
 
   // Formulaire « Ajouter un examen ou un travail ».
@@ -98,7 +103,23 @@ export default function Etude() {
     });
   }
 
-  const upcoming = data?.deadlines.filter((d) => !d.past) ?? [];
+  const upcoming = withoutHidden(data?.deadlines.filter((d) => !d.past) ?? [], hidden, (d) => d.id);
+
+  /** Supprime une échéance (et ses séances) après quelques secondes, sauf « Annuler ». */
+  function removeDeadline(id: string) {
+    setHidden((h) => toggled(h, id, true));
+    toast.later(
+      ts.view.deleted,
+      () =>
+        void (async () => {
+          const r = await deleteDeadline(supabase, userId, id);
+          if (!r.ok) setActionError(r.error);
+          await reload();
+          setHidden((h) => toggled(h, id, false));
+        })(),
+      () => setHidden((h) => toggled(h, id, false)),
+    );
+  }
 
   return (
     <Screen edges={[]} subtitle={ts.intro}>
@@ -165,7 +186,7 @@ export default function Etude() {
 
       <Section>
         <Heading>{ts.view.upcoming}</Heading>
-        {data && upcoming.length === 0 ? <EmptyState icon="study" title={ts.view.noUpcoming} /> : null}
+        {data && upcoming.length === 0 ? <EmptyState icon="study" title={ts.view.noUpcoming} text="Ajoute un examen ou un travail plus bas : on te proposera des séances d'étude dans tes temps libres." /> : null}
         {upcoming.map((d, i) => {
           const sessions = d.sessions.filter((s) => !s.past);
           return (
@@ -201,12 +222,7 @@ export default function Etude() {
                 variant="danger"
                 label={ts.view.delete}
                 disabled={busy}
-                onPress={() =>
-                  Alert.alert(ts.view.deleteConfirm(d.course, d.sessions.length), undefined, [
-                    { text: "Garder", style: "cancel" },
-                    { text: ts.view.delete, style: "destructive", onPress: () => void act(deleteDeadline(supabase, userId, d.id), () => { setFlash(ts.view.deleted); void reload(); }) },
-                  ])
-                }
+                onPress={() => removeDeadline(d.id)}
               />
             </Card>
             </Appear>
@@ -232,7 +248,7 @@ export default function Etude() {
               ))}
             </ScrollView>
           </View>
-          <Stepper label={ts.form.time} value={formatClockFr(parseClock(time) ?? 0)} steps={CLOCK_STEPS} onShift={(m) => setTime(shiftClock(time, m, 0, 23 * 60 + 45))} />
+          <Stepper label={ts.form.time} value={formatClockFr(parseClock(time) ?? 0)} steps={CLOCK_STEPS} onShift={(m) => setTime(shiftClock(time, m, 0, 23 * 60 + 45))} picker={{ mode: "time", minutes: parseClock(time) ?? 0, step: 5, min: 0, max: 23 * 60 + 55, onPick: (m) => setTime(formatClock(m)) }} />
           <Field label={ts.form.hours} placeholder={ts.form.hoursPlaceholder} hint={ts.form.hoursHelp} value={hours} onChangeText={setHours} keyboardType="decimal-pad" />
           <View style={{ gap: space.sm }}>
             <Label>{ts.form.difficulty}</Label>

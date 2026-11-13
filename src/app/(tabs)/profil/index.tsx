@@ -92,7 +92,7 @@ export default function Profil() {
     return (
       <Screen title={t.common.nav.profile}>
         <ErrorText>{error}</ErrorText>
-        {!error ? <Loading /> : null}
+        {!error ? <Loading kind="spinner" /> : null}
       </Screen>
     );
   }

@@ -4,6 +4,7 @@ import { View } from "react-native";
 
 import { PlanCard } from "@/components/plan-card";
 import { Button, EmptyState, ErrorText, Heading, Loading, Muted, Screen, Section } from "@/components/ui";
+import { Tip } from "@/components/tip";
 import { loadPlans } from "@/lib/plans/queries";
 import { groupPlans, type PlanView } from "@/lib/plans/view";
 import { locale, t } from "@/services/i18n";
@@ -56,6 +57,7 @@ export default function Plans() {
       ) : null}
       {data ? (
         <>
+          <Tip id="swipePlan" when={data.awaiting.length > 0} />
           {section(tp.sections.awaiting, tp.sections.awaitingHint, data.awaiting, true)}
           {section(tp.sections.upcoming, tp.sections.upcomingHint, data.upcoming)}
           {section(tp.sections.others, tp.sections.othersHint, data.others)}

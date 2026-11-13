@@ -8,11 +8,15 @@ import { BlockSheet } from "@/components/block-sheet";
 import { icons } from "@/components/icons";
 import { ListGroup, ListRow } from "@/components/list";
 import { Swap } from "@/components/motion";
-import { Badge, Button, EmptyState, ErrorText, Heading, IconButton, Loading, Notice, Screen, Section } from "@/components/ui";
+import { type SwipeAction, SwipeRow } from "@/components/swipe";
+import { Tip } from "@/components/tip";
+import { useToast } from "@/components/toast";
+import { Badge, Button, EmptyState, ErrorText, Heading, IconButton, Loading, Screen, Section } from "@/components/ui";
 import { defaultDay, weekRangeLabel } from "@/features/display";
 import { couleurJour, jourDeSemaine } from "@/features/apparence";
 import { type AgendaItem, dayLabelFr, mondayOf, weekAgenda } from "@/features/agenda";
-import { type BlockDraft, editBlockDraft, isEditableSource, newBlockDraft, setOccurrence } from "@/features/blocks";
+import { type BlockDraft, deleteBlock, editBlockDraft, isEditableSource, newBlockDraft, setOccurrence } from "@/features/blocks";
+import { toggled, withoutHidden } from "@/features/undo";
 import { toBlockSpec } from "@/lib/db/convert";
 import { getMyBusyBlocks, getMyPlaces, getMyProfile } from "@/lib/profile";
 import { formatClockFr, isRecurring, suggestSession, WEEKDAY_SHORT, weekdayOf } from "@/lib/scheduling/weeklyBlocks";
@@ -49,7 +53,9 @@ export default function Horaire() {
   // Jour choisi dans la bande ; `null` = aujourd'hui (ou le lundi d'une autre semaine).
   const [picked, setPicked] = useState<string | null>(null);
   const [draft, setDraft] = useState<BlockDraft | null>(null);
-  const [flash, setFlash] = useState<string | null>(null);
+  // Blocs supprimés dont « Annuler » est encore proposé : cachés en attendant.
+  const [hidden, setHidden] = useState<ReadonlySet<string>>(new Set());
+  const toast = useToast();
   const [actionError, setActionError] = useState<string | null>(null);
   const { data, error, refreshing, refresh, reload, age } = useLoad(async () => {
     const [rows, places, profile] = await Promise.all([
@@ -65,7 +71,7 @@ export default function Horaire() {
   useReloadOnFocus(reload, age, 2_000);
 
   const today = formatInTimeZone(new Date(), TIME_ZONE, "yyyy-MM-dd");
-  const days = data ? weekAgenda(data.rows, mondayOf(today, offset), today) : null;
+  const days = data ? weekAgenda(withoutHidden(data.rows, hidden, (r) => r.id), mondayOf(today, offset), today) : null;
   const monday = mondayOf(today, offset);
   const selected = days ? (days.find((d) => d.day === picked)?.day ?? defaultDay(days.map((d) => d.day), today)) : today;
   const shown = days?.find((d) => d.day === selected) ?? null;
@@ -81,9 +87,26 @@ export default function Horaire() {
 
   function done(message: string) {
     setDraft(null);
-    setFlash(message);
+    toast.show(message);
     setActionError(null);
     void reload();
+  }
+
+  /** Supprime un bloc après quelques secondes, sauf si on touche « Annuler ». */
+  function removeBlock(id: string, title: string) {
+    setDraft(null);
+    setHidden((h) => toggled(h, id, true));
+    toast.later(
+      tb.deleted(title),
+      () =>
+        void (async () => {
+          const r = await deleteBlock(supabase, userId, id);
+          if (!r.ok) setActionError(r.error);
+          await reload();
+          setHidden((h) => toggled(h, id, false));
+        })(),
+      () => setHidden((h) => toggled(h, id, false)),
+    );
   }
 
   function newBlock(day: string) {
@@ -98,7 +121,24 @@ export default function Horaire() {
   async function occurrence(item: AgendaItem, day: string, skip: boolean) {
     const r = await setOccurrence(supabase, userId, item.block.id, day, skip, today);
     if (!r.ok) return setActionError(r.error);
-    done(skip ? tb.skipped(item.title, dayLabelFr(day)) : t.schedule.restored(item.title, dayLabelFr(day)));
+    setActionError(null);
+    void reload();
+    // Annulé une fois : « Annuler » le rétablit tout de suite.
+    if (skip) toast.show(tb.skipped(item.title, dayLabelFr(day)), () => void occurrence(item, day, false));
+    else toast.show(t.schedule.restored(item.title, dayLabelFr(day)));
+  }
+
+  /** Actions qu'on voit en glissant un bloc vers la gauche. */
+  function swipeActions(item: AgendaItem, day: string): SwipeAction[] {
+    const b = item.block;
+    if (!isEditableSource(b.source)) return [];
+    const out: SwipeAction[] = [];
+    if (isRecurring(b)) {
+      if (item.skipped) out.push({ label: "Rétablir", icon: "undo", color: c.success, onPress: () => void occurrence(item, day, false) });
+      else if (day >= today) out.push({ label: "Cette fois", icon: "skip", color: c.warning, onPress: () => void occurrence(item, day, true) });
+    }
+    out.push({ label: "Supprimer", icon: "trash", color: c.danger, onPress: () => removeBlock(b.id, item.title) });
+    return out;
   }
 
   function onItem(item: AgendaItem, day: string) {
@@ -219,11 +259,11 @@ export default function Horaire() {
           </View>
         </View>
 
-        <Notice>{flash}</Notice>
         <ErrorText>{actionError}</ErrorText>
         <ErrorText>{error}</ErrorText>
         {!days && !error ? <Loading /> : null}
 
+        <Tip id="swipeBlock" when={!!shown && shown.items.some((i) => isEditableSource(i.block.source))} />
         {shown ? (
           // Autre jour ou autre semaine : le détail arrive en fondu.
           <Swap key={shown.day}>
@@ -242,15 +282,16 @@ export default function Horaire() {
                   const bar =
                     i.source === "meetup" ? c.primary : i.source === "study" ? c.success : couleurJour(jourDeSemaine(shown.day), scheme);
                   return (
+                    <SwipeRow key={i.id} trailing={swipeActions(i, shown.day)}>
                     <Pressable
-                      key={i.id}
                       accessibilityRole="button"
                       accessibilityLabel={`${i.title}, ${i.timeLabel}${i.skipped ? ", annulé cette fois-ci" : ""}`}
-                      accessibilityHint="Modifier ou annuler cette fois-ci"
+                      accessibilityHint="Modifier ou annuler cette fois-ci. Glisser vers la gauche pour plus d'actions."
                       onPress={() => onItem(i, shown.day)}
                       android_ripple={{ color: c.border }}
                       style={({ pressed }) => [
                         styles.item,
+                        { backgroundColor: c.card },
                         index > 0 ? { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: c.border } : null,
                         { opacity: pressed && !ANDROID ? 0.5 : 1 },
                       ]}
@@ -275,6 +316,7 @@ export default function Horaire() {
                         ) : null}
                       </View>
                     </Pressable>
+                    </SwipeRow>
                   );
                 })}
               </View>
@@ -297,6 +339,7 @@ export default function Horaire() {
           today={today}
           onClose={() => setDraft(null)}
           onSaved={done}
+          onDelete={removeBlock}
         />
       ) : null}
     </>

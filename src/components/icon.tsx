@@ -25,6 +25,7 @@ const MAP = {
   chevronLeft: ["chevron.left", "chevron_left"],
   clock: ["clock", "schedule"],
   close: ["xmark", "close"],
+  skip: ["calendar.badge.minus", "event_busy"],
   edit: ["pencil", "edit"],
   external: ["arrow.up.right", "open_in_new"],
   group: ["person.2.fill", "group"],
@@ -47,6 +48,7 @@ const MAP = {
   travel: ["figure.walk", "directions_walk"],
   trash: ["trash", "delete"],
   tune: ["slider.horizontal.3", "tune"],
+  undo: ["arrow.uturn.backward", "undo"],
 } as const satisfies Record<string, readonly [Ios, Material]>;
 
 export type IconName = keyof typeof MAP;

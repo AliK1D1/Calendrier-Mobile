@@ -4,11 +4,13 @@ import { ActionSheetIOS, Alert, Platform } from "react-native";
 import { AddressSearch } from "@/components/address-search";
 import { ListGroup, ListRow } from "@/components/list";
 import { Reveal } from "@/components/motion";
+import { useToast } from "@/components/toast";
 import { Toggle } from "@/components/toggle";
-import { Badge, Button, Card, EmptyState, ErrorText, Field, Fill, Heading, Label, Loading, Notice, Row, Screen, Section } from "@/components/ui";
+import { Badge, Button, Card, EmptyState, ErrorText, Field, Fill, Heading, Label, Loading, Row, Screen, Section } from "@/components/ui";
 import { addPlace, deletePlace, renamePlace, setHome } from "@/features/settings";
 import type { GeocodeResult } from "@/lib/geocoding/nominatim";
 import { getMyPlaces, getMyProfile } from "@/lib/profile";
+import { toggled, withoutHidden } from "@/features/undo";
 import { t } from "@/services/i18n";
 import { useAuthed } from "@/services/session";
 import { useLoad } from "@/services/use-load";
@@ -29,7 +31,8 @@ export default function Lieux() {
   const [asHome, setAsHome] = useState(false);
   const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null);
   const [busy, setBusy] = useState(false);
-  const [flash, setFlash] = useState<string | null>(null);
+  const [hidden, setHidden] = useState<ReadonlySet<string>>(new Set());
+  const toast = useToast();
   const [actionError, setActionError] = useState<string | null>(null);
 
   async function run(p: Promise<{ ok: true } | { ok: false; error: string }>, message: string) {
@@ -41,7 +44,7 @@ export default function Lieux() {
       setActionError(r.error);
       return false;
     }
-    setFlash(message);
+    toast.show(message);
     void reload();
     return true;
   }
@@ -57,11 +60,20 @@ export default function Lieux() {
     }
   }
 
-  function confirmDelete(id: string, placeName: string, isHome: boolean) {
-    Alert.alert(tl.confirmDelete(placeName, isHome), undefined, [
-      { text: "Garder", style: "cancel" },
-      { text: "Supprimer", style: "destructive", onPress: () => void run(deletePlace(supabase, userId, id), tl.deleted) },
-    ]);
+  /** Supprime un lieu après quelques secondes, sauf si on touche « Annuler ». */
+  function remove(id: string) {
+    setHidden((h) => toggled(h, id, true));
+    toast.later(
+      tl.deleted,
+      () =>
+        void (async () => {
+          const r = await deletePlace(supabase, userId, id);
+          if (!r.ok) setActionError(r.error);
+          await reload();
+          setHidden((h) => toggled(h, id, false));
+        })(),
+      () => setHidden((h) => toggled(h, id, false)),
+    );
   }
 
   /** Toucher un lieu : choisir comme maison, renommer ou supprimer. */
@@ -69,7 +81,7 @@ export default function Lieux() {
     const actions: { text: string; destructive?: boolean; run: () => void }[] = [];
     if (!isHome) actions.push({ text: tl.setHome, run: () => void run(setHome(supabase, userId, p.id), tl.isHome(p.name)) });
     actions.push({ text: tl.rename, run: () => setRenaming({ id: p.id, name: p.name }) });
-    actions.push({ text: "Supprimer", destructive: true, run: () => confirmDelete(p.id, p.name, isHome) });
+    actions.push({ text: "Supprimer", destructive: true, run: () => remove(p.id) });
     if (Platform.OS === "ios") {
       const options = [...actions.map((a) => a.text), "Annuler"];
       ActionSheetIOS.showActionSheetWithOptions(
@@ -86,14 +98,13 @@ export default function Lieux() {
 
   return (
     <Screen edges={[]} subtitle={tl.intro}>
-      <Notice>{flash}</Notice>
       <ErrorText>{actionError}</ErrorText>
       <ErrorText>{error}</ErrorText>
-      {!data && !error ? <Loading /> : null}
-      {data && data.places.length === 0 ? <EmptyState icon="pin" title={tl.none} /> : null}
-      {data && data.places.length > 0 ? (
-        <ListGroup footer="Touche un lieu pour le choisir comme maison, le renommer ou le supprimer.">
-          {data.places.map((p) => {
+      {!data && !error ? <Loading kind="list" /> : null}
+      {data && withoutHidden(data.places, hidden, (p) => p.id).length === 0 ? <EmptyState icon="pin" title={tl.none} text="Ajoute ta maison et ton cégep plus bas : ils servent à calculer tes trajets vers les plans." /> : null}
+      {data && withoutHidden(data.places, hidden, (p) => p.id).length > 0 ? (
+        <ListGroup footer="Touche un lieu pour le choisir comme maison ou le renommer. Glisse-le vers la gauche pour le supprimer.">
+          {withoutHidden(data.places, hidden, (p) => p.id).map((p) => {
             const isHome = p.id === data.homeId;
             return (
               <ListRow
@@ -104,6 +115,7 @@ export default function Lieux() {
                 chevron
                 onPress={() => onPlace(p, isHome)}
                 accessibilityHint="Choisir comme maison, renommer ou supprimer"
+                swipe={[{ label: "Supprimer", icon: "trash", color: c.danger, onPress: () => remove(p.id) }]}
               />
             );
           })}

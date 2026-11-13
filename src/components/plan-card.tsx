@@ -4,6 +4,7 @@ import { Alert, View } from "react-native";
 import { AvatarStack } from "@/components/avatar";
 import { DateTile } from "@/components/date-tile";
 import { Appear } from "@/components/motion";
+import { type SwipeAction, SwipeRow } from "@/components/swipe";
 import { Badge, Body, Button, Card, Divider, ErrorText, Fill, Meta, Muted, Row, type Tone } from "@/components/ui";
 import { dayOfInstant, namesSummary } from "@/features/display";
 import { cancelPlan, respondToPlan } from "@/features/actions";
@@ -11,6 +12,7 @@ import { isAwaitingMe, type PlanView } from "@/lib/plans/view";
 import { t } from "@/services/i18n";
 import { useAuthed } from "@/services/session";
 import { space } from "@/theme/colors";
+import { shape } from "@/theme/tokens";
 import { usePalette } from "@/theme/use-palette";
 
 const tp = t.plans;
@@ -81,9 +83,19 @@ export function PlanCard({ plan, onChanged, index = 0 }: { plan: PlanView; onCha
   const done = plan.state !== "upcoming";
   const goingNames = plan.going.map((g) => g.name);
   const canAnswer = plan.state === "upcoming" && plan.invited && !plan.isMine;
+  // Glisser la carte : vers la droite pour accepter, vers la gauche pour refuser.
+  const accept: SwipeAction[] =
+    canAnswer && plan.myResponse !== "yes" && busy === null
+      ? [{ label: tp.accept, icon: "check", color: c.success, onPress: () => void run("yes") }]
+      : [];
+  const decline: SwipeAction[] =
+    canAnswer && plan.myResponse !== "no" && busy === null
+      ? [{ label: tp.decline, icon: "close", color: c.danger, onPress: () => void run("no") }]
+      : [];
 
   return (
     <Appear index={index}>
+    <SwipeRow leading={accept} trailing={decline} radius={shape.card}>
     <Card>
       <Row nowrap align="flex-start" gap={space.md}>
         <DateTile day={dayOfInstant(plan.startsAt)} dimmed={done} />
@@ -159,6 +171,7 @@ export function PlanCard({ plan, onChanged, index = 0 }: { plan: PlanView; onCha
         </>
       ) : null}
     </Card>
+    </SwipeRow>
     </Appear>
   );
 }

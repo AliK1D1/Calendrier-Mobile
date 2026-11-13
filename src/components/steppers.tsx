@@ -1,10 +1,13 @@
 /**
  * Réglage d'une heure ou d'une date par petits pas (sans clavier) : la valeur au centre, les
- * boutons « moins » à gauche et « plus » à droite, dans une seule barre.
+ * boutons « moins » à gauche et « plus » à droite, dans une seule barre. Avec `picker`, on peut
+ * aussi toucher la valeur pour ouvrir le sélecteur natif (roulette d'iOS, horloge Material).
  */
 import { StyleSheet, Text, View } from "react-native";
 
 import { PressScale } from "@/components/motion";
+import { ValuePicker } from "@/components/value-picker";
+import type { PickerSpec } from "@/features/pickers";
 import { hapticSelect } from "@/services/haptics";
 
 import { space } from "@/theme/colors";
@@ -38,6 +41,7 @@ export function Stepper({
   value,
   steps,
   onShift,
+  picker,
 }: {
   label: string;
   /** Le libellé n'est dit qu'aux lecteurs d'écran (il est déjà écrit au-dessus). */
@@ -47,6 +51,8 @@ export function Stepper({
   /** Pas proposés, du plus petit au plus grand : `{ label: "15", by: 15 }`. */
   steps: readonly { label: string; by: number }[];
   onShift: (by: number) => void;
+  /** Sélecteur natif (heure ou date) ouvert en touchant la valeur. Sans lui, texte seul. */
+  picker?: PickerSpec;
 }) {
   const c = usePalette();
   const down = [...steps].reverse();
@@ -57,14 +63,18 @@ export function Stepper({
         {down.map((s) => (
           <Step key={`-${s.by}`} label={`− ${s.label}`} hint={`${label} : moins ${s.label}`} onPress={() => onShift(-s.by)} />
         ))}
-        <Text
-          accessibilityLiveRegion="polite"
-          numberOfLines={1}
-          adjustsFontSizeToFit
-          style={[type.headline, styles.value, { color: c.text }]}
-        >
-          {value}
-        </Text>
+        {picker ? (
+          <ValuePicker spec={picker} label={label} text={value} />
+        ) : (
+          <Text
+            accessibilityLiveRegion="polite"
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            style={[type.headline, styles.value, { color: c.text }]}
+          >
+            {value}
+          </Text>
+        )}
         {steps.map((s) => (
           <Step key={`+${s.by}`} label={`+ ${s.label}`} hint={`${label} : plus ${s.label}`} onPress={() => onShift(s.by)} />
         ))}

@@ -23,7 +23,7 @@ import {
   View,
   type ViewStyle,
 } from "react-native";
-import Animated, { ReduceMotion, useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
+import Animated, { ReduceMotion, useAnimatedStyle, useSharedValue, withRepeat, withSpring, withTiming } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Icon, type IconName } from "@/components/icon";
@@ -375,12 +375,59 @@ export function Field({
   );
 }
 
-export function Loading() {
+/**
+ * Chargement : des cartes grises à la forme du contenu qui arrive (au lieu d'une roue), qui
+ * « respirent » doucement. L'écran ne saute plus quand les vraies données arrivent.
+ * `kind` : `cards` (plans), `list` (groupes, lieux), `spinner` (petite zone, ex. profil).
+ */
+export function Loading({ kind = "cards", count = 3 }: { kind?: "cards" | "list" | "spinner"; count?: number }) {
   const c = usePalette();
+  const pulse = useSharedValue(0);
+  useEffect(() => {
+    pulse.value = withRepeat(withTiming(1, { duration: 900, reduceMotion: ReduceMotion.System }), -1, true, undefined, ReduceMotion.System);
+  }, [pulse]);
+  const breathe = useAnimatedStyle(() => ({ opacity: 0.55 + 0.45 * pulse.value }));
+  if (kind === "spinner") {
+    return (
+      <View style={{ padding: space.xxl, alignItems: "center" }}>
+        <ActivityIndicator color={IOS ? c.muted : c.primary} size={ANDROID ? "large" : "small"} />
+      </View>
+    );
+  }
+  const bone = { backgroundColor: c.border, borderRadius: 6 };
+  const rows = Array.from({ length: count }, (_, i) => i);
   return (
-    <View style={{ padding: space.xxl, alignItems: "center" }}>
-      <ActivityIndicator color={IOS ? c.muted : c.primary} size={ANDROID ? "large" : "small"} />
-    </View>
+    <Animated.View
+      accessible
+      accessibilityRole="progressbar"
+      accessibilityLabel="Chargement"
+      style={[{ gap: kind === "cards" ? space.md : 0 }, breathe]}
+    >
+      {kind === "cards"
+        ? rows.map((i) => (
+            <View key={i} style={[styles.skelCard, { backgroundColor: c.card }]}>
+              <View style={[bone, { width: 48, height: 52, borderRadius: shape.tile }]} />
+              <View style={{ flex: 1, gap: space.sm, paddingTop: 2 }}>
+                <View style={[bone, { width: "70%", height: 16 }]} />
+                <View style={[bone, { width: "45%", height: 12 }]} />
+                <View style={[bone, { width: "55%", height: 12 }]} />
+              </View>
+            </View>
+          ))
+        : (
+            <View style={[styles.skelList, { backgroundColor: c.card }]}>
+              {rows.map((i) => (
+                <View key={i} style={[styles.skelRow, i > 0 ? { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: c.border } : null]}>
+                  <View style={[bone, { width: 36, height: 36, borderRadius: 18 }]} />
+                  <View style={{ flex: 1, gap: space.xs + 2 }}>
+                    <View style={[bone, { width: "50%", height: 14 }]} />
+                    <View style={[bone, { width: "30%", height: 11 }]} />
+                  </View>
+                </View>
+              ))}
+            </View>
+          )}
+    </Animated.View>
   );
 }
 
@@ -581,6 +628,9 @@ export function Label({ children }: { children: ReactNode }) {
 }
 
 const styles = StyleSheet.create({
+  skelCard: { flexDirection: "row", gap: space.md, padding: space.lg, borderRadius: shape.card },
+  skelList: { borderRadius: shape.card, overflow: "hidden" },
+  skelRow: { flexDirection: "row", alignItems: "center", gap: space.md, paddingHorizontal: space.lg, paddingVertical: space.md },
   screen: { padding: space.lg, gap: space.xl, paddingBottom: space.xxl * 2 },
   headingRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: space.md, minHeight: 28 },
   headingTitle: { flexDirection: "row", alignItems: "center", gap: space.sm, flexShrink: 1 },

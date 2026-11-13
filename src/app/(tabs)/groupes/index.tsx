@@ -55,7 +55,7 @@ export default function Groupes() {
   return (
     <Screen title={tg.title} refreshing={refreshing} onRefresh={refresh}>
       <ErrorText>{error}</ErrorText>
-      {!data && !error ? <Loading /> : null}
+      {!data && !error ? <Loading kind="list" /> : null}
       {data && data.length === 0 ? (
         <EmptyState
           icon="group"
