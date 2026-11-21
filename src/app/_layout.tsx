@@ -4,6 +4,7 @@ import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 
+import { DuckRainProvider } from "@/components/duck-rain";
 import { ToastProvider } from "@/components/toast";
 
 import { SessionProvider, useSession } from "@/services/session";
@@ -34,6 +35,8 @@ function RootStack() {
   return (
     <ThemeProvider value={theme}>
       <ToastProvider>
+      {/* Mode canard (Profil : toucher 7 fois la version). Sous le bandeau, qui reste lisible. */}
+      <DuckRainProvider>
       <StatusBar style={scheme === "dark" ? "light" : "dark"} />
       <Stack screenOptions={headerOptions(c)}>
         <Stack.Protected guard={signedIn}>
@@ -48,6 +51,7 @@ function RootStack() {
           <Stack.Screen name="inscription" options={{ title: "Créer un compte" }} />
         </Stack.Protected>
       </Stack>
+      </DuckRainProvider>
       </ToastProvider>
     </ThemeProvider>
   );
