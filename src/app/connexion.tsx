@@ -1,5 +1,5 @@
 import { Link } from "expo-router";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { KeyboardAvoidingView, Platform, View } from "react-native";
 
 import { BrandHeader } from "@/components/brand";
@@ -18,21 +18,30 @@ export default function Connexion() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(supabase ? null : t.auth.errors.config);
   const [busy, setBusy] = useState(false);
+  // Verrou immédiat : bloque un 2e appui (ou la touche « Envoyer » du clavier) avant le rendu.
+  const sending = useRef(false);
 
   async function submit() {
-    if (!supabase) return;
+    if (!supabase || sending.current) return;
     const mail = normalizeEmail(email);
     const invalid = validateLogin(mail, password);
     if (invalid) {
       setError(t.auth.errors[invalid] ?? t.auth.errors.echec);
       return;
     }
+    sending.current = true;
     setBusy(true);
     setError(null);
-    const { error: err } = await supabase.auth.signInWithPassword({ email: mail, password });
-    setBusy(false);
-    // Réussite : la session change et l'app passe aux onglets toute seule.
-    if (err) setError(t.auth.errors[loginErrorCode(err)] ?? t.auth.errors.echec);
+    try {
+      const { error: err } = await supabase.auth.signInWithPassword({ email: mail, password });
+      // Réussite : la session change et l'app passe aux onglets toute seule.
+      if (err) setError(t.auth.errors[loginErrorCode(err)] ?? t.auth.errors.echec);
+    } catch {
+      setError(t.auth.errors.echec);
+    } finally {
+      sending.current = false;
+      setBusy(false);
+    }
   }
 
   return (

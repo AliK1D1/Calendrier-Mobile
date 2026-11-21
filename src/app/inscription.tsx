@@ -1,5 +1,5 @@
 import { router } from "expo-router";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { KeyboardAvoidingView, Platform } from "react-native";
 
 import { Button, Card, ErrorText, Field, Footnote, Screen } from "@/components/ui";
@@ -20,11 +20,13 @@ export default function Inscription() {
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState<string | null>(supabase ? null : ts.errors.config);
   const [busy, setBusy] = useState(false);
+  // Verrou immédiat : bloque un 2e appui (ou la touche « Envoyer » du clavier) avant le rendu.
+  const sending = useRef(false);
 
   const missing = password ? passwordProblems(password).filter((p) => p !== "long") : [];
 
   async function submit() {
-    if (!supabase) return;
+    if (!supabase || sending.current) return;
     const input = {
       email: normalizeEmail(email),
       username: normalizeUsername(username),
@@ -36,14 +38,24 @@ export default function Inscription() {
       setError(ts.errors[invalid] ?? ts.errors.echec);
       return;
     }
+    sending.current = true;
     setBusy(true);
     setError(null);
-    const { data, error: err } = await supabase.auth.signUp({
-      email: input.email,
-      password,
-      options: { data: { username: input.username } },
-    });
-    setBusy(false);
+    let result: Awaited<ReturnType<typeof supabase.auth.signUp>>;
+    try {
+      result = await supabase.auth.signUp({
+        email: input.email,
+        password,
+        options: { data: { username: input.username } },
+      });
+    } catch {
+      setError(ts.errors.echec);
+      return;
+    } finally {
+      sending.current = false;
+      setBusy(false);
+    }
+    const { data, error: err } = result;
     if (err) {
       setError(ts.errors[signUpErrorCode(err)] ?? ts.errors.echec);
       return;
