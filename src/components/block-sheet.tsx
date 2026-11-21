@@ -3,15 +3,16 @@
  * le site (validateBlockForm) ; heures par pas de 15 min, dates par semaine.
  */
 import { useState } from "react";
-import { Alert, ScrollView, View } from "react-native";
+import { Platform, ScrollView, View } from "react-native";
 
 import { Sheet } from "@/components/sheet";
 import { CLOCK_STEPS, Stepper } from "@/components/steppers";
 import { Button, Chip, ErrorText, Field, Footnote, Label, Row, Segmented } from "@/components/ui";
-import { addBlocks, type BlockDraft, deleteBlock, shiftClock, shiftWeeks, updateBlock } from "@/features/blocks";
+import { Tip } from "@/components/tip";
+import { addBlocks, type BlockDraft, shiftClock, shiftWeeks, updateBlock } from "@/features/blocks";
 import { nextDays } from "@/features/propose";
 import { dayLabelFr } from "@/features/agenda";
-import { formatClockFr, parseClock, WEEKDAY_SHORT, WEEKDAYS, type Weekday } from "@/lib/scheduling/weeklyBlocks";
+import { formatClock, formatClockFr, parseClock, WEEKDAY_SHORT, WEEKDAYS, type Weekday } from "@/lib/scheduling/weeklyBlocks";
 import { t } from "@/services/i18n";
 import { useAuthed } from "@/services/session";
 import { space } from "@/theme/colors";
@@ -28,6 +29,7 @@ export function BlockSheet({
   today,
   onClose,
   onSaved,
+  onDelete,
 }: {
   draft: BlockDraft;
   /** Mes lieux (sans la maison, qui est « nul »). */
@@ -36,6 +38,8 @@ export function BlockSheet({
   today: string;
   onClose: () => void;
   onSaved: (message: string) => void;
+  /** Supprimer : la feuille se ferme et l'écran propose « Annuler » quelques secondes. */
+  onDelete: (id: string, title: string) => void;
 }) {
   const { supabase, userId } = useAuthed();
   const [d, setD] = useState<BlockDraft>(draft);
@@ -63,22 +67,7 @@ export function BlockSheet({
   }
 
   function remove() {
-    if (!d.id) return;
-    const id = d.id;
-    Alert.alert(tb.confirmDelete(d.kind, d.title), undefined, [
-      { text: "Garder", style: "cancel" },
-      {
-        text: "Supprimer",
-        style: "destructive",
-        onPress: async () => {
-          setBusy(true);
-          const r = await deleteBlock(supabase, userId, id);
-          setBusy(false);
-          if (!r.ok) setError(r.error);
-          else onSaved(tb.deleted(d.title));
-        },
-      },
-    ]);
+    if (d.id) onDelete(d.id, d.title.trim());
   }
 
   const kinds = d.kind === "custom" ? (["weekly", "once", "custom"] as const) : (["weekly", "once"] as const);
@@ -104,8 +93,9 @@ export function BlockSheet({
         </Row>
       </View>
 
-      <Stepper label={tb.start} value={formatClockFr(parseClock(d.start) ?? 0)} steps={CLOCK_STEPS} onShift={(m) => set({ start: shiftClock(d.start, m, 0, 24 * 60 - 15) })} />
-      <Stepper label={tb.end} value={formatClockFr(parseClock(d.end) ?? 0)} steps={CLOCK_STEPS} onShift={(m) => set({ end: shiftClock(d.end, m, 15, 24 * 60) })} />
+      <Tip id="pickTime" when={Platform.OS !== "web"} />
+      <Stepper label={tb.start} value={formatClockFr(parseClock(d.start) ?? 0)} steps={CLOCK_STEPS} onShift={(m) => set({ start: shiftClock(d.start, m, 0, 24 * 60 - 15) })} picker={{ mode: "time", minutes: parseClock(d.start) ?? 0, step: 5, min: 0, max: 24 * 60 - 15, onPick: (m) => set({ start: formatClock(m) }) }} />
+      <Stepper label={tb.end} value={formatClockFr(parseClock(d.end) ?? 0)} steps={CLOCK_STEPS} onShift={(m) => set({ end: shiftClock(d.end, m, 15, 24 * 60) })} picker={{ mode: "time", minutes: parseClock(d.end) ?? 0, step: 5, min: 15, max: 24 * 60 - 5, onPick: (m) => set({ end: formatClock(m) }) }} />
 
       <View style={{ gap: space.sm }}>
         <Label>{tb.repeat}</Label>
@@ -141,9 +131,9 @@ export function BlockSheet({
               ))}
             </Row>
           </View>
-          <Stepper label={tb.sessionStart} value={dayLabelFr(d.sessionStart)} steps={WEEK_STEPS} onShift={(n) => set({ sessionStart: shiftWeeks(d.sessionStart, n) })} />
+          <Stepper label={tb.sessionStart} value={dayLabelFr(d.sessionStart)} steps={WEEK_STEPS} onShift={(n) => set({ sessionStart: shiftWeeks(d.sessionStart, n) })} picker={{ mode: "date", day: d.sessionStart, onPick: (day) => set({ sessionStart: day }) }} />
           <View style={{ gap: space.sm }}>
-            <Stepper label={tb.sessionEnd} value={dayLabelFr(d.sessionEnd)} steps={WEEK_STEPS} onShift={(n) => set({ sessionEnd: shiftWeeks(d.sessionEnd, n) })} />
+            <Stepper label={tb.sessionEnd} value={dayLabelFr(d.sessionEnd)} steps={WEEK_STEPS} onShift={(n) => set({ sessionEnd: shiftWeeks(d.sessionEnd, n) })} picker={{ mode: "date", day: d.sessionEnd, onPick: (day) => set({ sessionEnd: day }) }} />
             <Footnote>{tb.sessionHint}</Footnote>
           </View>
         </>

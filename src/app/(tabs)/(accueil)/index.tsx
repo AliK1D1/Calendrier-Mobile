@@ -5,6 +5,8 @@ import { StyleSheet, Text, View } from "react-native";
 import { Icon, type IconName } from "@/components/icon";
 import { PlanCard } from "@/components/plan-card";
 import { Body, Button, Card, EmptyState, ErrorText, Heading, Loading, Muted, Row, Screen, Section } from "@/components/ui";
+import { FreeNow } from "@/components/free-now";
+import { Tip } from "@/components/tip";
 import { dayLabelFr } from "@/features/agenda";
 import { loadPlans } from "@/lib/plans/queries";
 import { TIME_ZONE } from "@/lib/scheduling/time";
@@ -12,6 +14,7 @@ import { homePlans } from "@/lib/ux/homePlans";
 import { locale, t } from "@/services/i18n";
 import { useAuthed } from "@/services/session";
 import { getHomeProfile } from "@/services/home";
+import { programmerRappels } from "@/services/notifications";
 import { useLoad, useReloadOnFocus } from "@/services/use-load";
 import { space } from "@/theme/colors";
 import { strong, type } from "@/theme/tokens";
@@ -43,6 +46,7 @@ export default function Accueil() {
       loadPlans(supabase, userId, new Date(), { locale }),
     ]);
     if (!plans.ok) throw new Error(plans.error);
+    void programmerRappels(plans.views);
     return { profile, onboarded: profile.onboarded, plans: homePlans(plans.views) };
   }, userId, "accueil");
   // Retour sur l'accueil (bienvenue, un groupe, un autre onglet) : on relit les plans et l'état
@@ -78,13 +82,16 @@ export default function Accueil() {
         <Shortcut icon="study" label="Étude" href="/etude" />
       </Row>
 
+      {data && data.onboarded !== false ? <FreeNow /> : null}
+
       {data && data.plans.awaiting.length > 0 ? (
         <Section>
           <View style={{ gap: 2 }}>
             <Heading>{t.home.plans.awaiting(data.plans.awaiting.length)}</Heading>
             <Muted>{t.home.plans.awaitingHint}</Muted>
           </View>
-          {data.plans.awaiting.map((p) => <PlanCard key={p.id} plan={p} onChanged={() => void reload()} />)}
+          <Tip id="swipePlan" />
+          {data.plans.awaiting.map((p, i) => <PlanCard key={p.id} index={i} plan={p} onChanged={() => void reload()} />)}
         </Section>
       ) : null}
 
@@ -93,7 +100,7 @@ export default function Accueil() {
           <Heading action={{ label: data.plans.moreUpcoming > 0 ? `Tout voir (${data.plans.upcoming.length + data.plans.moreUpcoming})` : "Tout voir", onPress: () => router.push("/plans") }}>
             {t.home.plans.upcoming}
           </Heading>
-          {data.plans.upcoming.map((p) => <PlanCard key={p.id} plan={p} onChanged={() => void reload()} />)}
+          {data.plans.upcoming.map((p, i) => <PlanCard key={p.id} index={i + data.plans.awaiting.length} plan={p} onChanged={() => void reload()} />)}
         </Section>
       ) : null}
 

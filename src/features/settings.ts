@@ -5,6 +5,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { dbErrorMessage } from "@/lib/actions";
+import { validateUuid } from "@/lib/groups/validation";
 import {
   validateDisplayName,
   validateOnboardingInput,
@@ -68,6 +69,18 @@ export async function addPlace(
   if (error) return { ok: false, error: dbErrorMessage("Ajout du lieu", error) };
   if (asHome) return setHome(supabase, userId, data.id);
   return { ok: true };
+}
+
+/** Ajoute un lieu favori au groupe (même règle que le site) : visible par ses membres seulement. */
+export async function addGroupFavorite(supabase: SupabaseClient, userId: string, groupId: string, input: unknown): Promise<Result> {
+  const gid = validateUuid(groupId);
+  if (!gid.ok) return gid;
+  const place = validatePlaceInput(input);
+  if (!place.ok) return place;
+  const { error } = await supabase
+    .from("places")
+    .insert({ owner_id: userId, ...place.value, group_id: gid.value, is_group_favorite: true });
+  return error ? { ok: false, error: dbErrorMessage("Ajout du lieu du groupe", error) } : { ok: true };
 }
 
 export async function renamePlace(supabase: SupabaseClient, userId: string, id: string, name: string): Promise<Result> {

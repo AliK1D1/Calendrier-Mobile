@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { avatarTone, dateTile, dayOfInstant, defaultDay, initials, namesSummary, weekRangeLabel } from "../display";
+import { avatarTone, dateTile, dayOfInstant, defaultDay, initials, namesSummary, staggerDelay, weekRangeLabel } from "../display";
 
 describe("initials", () => {
   it("prend la première lettre du premier et du dernier mot", () => {
@@ -76,5 +76,21 @@ describe("namesSummary", () => {
     expect(namesSummary(["Ali", "Sam", "Léa"])).toBe("Ali, Sam et 1 autre");
     expect(namesSummary(["Ali", "Sam", "Léa", "Max"])).toBe("Ali, Sam et 2 autres");
     expect(namesSummary(["Ali", "Sam", "Léa"], 3)).toBe("Ali, Sam et Léa");
+  });
+});
+
+describe("staggerDelay", () => {
+  it("fait arriver les premiers éléments en cascade", () => {
+    expect(staggerDelay(0)).toBe(0);
+    expect(staggerDelay(1)).toBe(45);
+    expect(staggerDelay(3)).toBe(135);
+  });
+  it("ne fait pas attendre une longue liste", () => {
+    expect(staggerDelay(6)).toBe(270);
+    expect(staggerDelay(40)).toBe(270);
+  });
+  it("ignore les valeurs invalides", () => {
+    expect(staggerDelay(-2)).toBe(0);
+    expect(staggerDelay(Number.NaN)).toBe(0);
   });
 });

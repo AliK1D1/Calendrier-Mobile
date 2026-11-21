@@ -4,9 +4,11 @@ import { View } from "react-native";
 
 import { PlanCard } from "@/components/plan-card";
 import { Button, EmptyState, ErrorText, Heading, Loading, Muted, Screen, Section } from "@/components/ui";
+import { Tip } from "@/components/tip";
 import { loadPlans } from "@/lib/plans/queries";
 import { groupPlans, type PlanView } from "@/lib/plans/view";
 import { locale, t } from "@/services/i18n";
+import { programmerRappels } from "@/services/notifications";
 import { useAuthed } from "@/services/session";
 import { useLoad } from "@/services/use-load";
 
@@ -22,6 +24,7 @@ export default function Plans() {
   const { data, error, refreshing, refresh, reload } = useLoad(async () => {
     const r = await loadPlans(supabase, userId, new Date(), { locale });
     if (!r.ok) throw new Error(r.error);
+    void programmerRappels(r.views);
     return groupPlans(r.views);
   }, userId, "plans");
 
@@ -32,7 +35,7 @@ export default function Plans() {
           <Heading count={count ? list.length : undefined}>{title}</Heading>
           {hint ? <Muted>{hint}</Muted> : null}
         </View>
-        {list.map((p) => <PlanCard key={p.id} plan={p} onChanged={() => void reload()} />)}
+        {list.map((p, i) => <PlanCard key={p.id} index={i} plan={p} onChanged={() => void reload()} />)}
       </Section>
     );
 
@@ -54,6 +57,7 @@ export default function Plans() {
       ) : null}
       {data ? (
         <>
+          <Tip id="swipePlan" when={data.awaiting.length > 0} />
           {section(tp.sections.awaiting, tp.sections.awaitingHint, data.awaiting, true)}
           {section(tp.sections.upcoming, tp.sections.upcomingHint, data.upcoming)}
           {section(tp.sections.others, tp.sections.othersHint, data.others)}

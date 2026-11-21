@@ -6,6 +6,7 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import type { FreeNowMatchView } from "@/lib/meetups/freeNow";
 import type { ProposalView } from "@/lib/meetups/search";
 import { type PlanRepeat, type ProposeFormInput, draftFromSlot, validatePropose } from "@/lib/plans/validation";
 import { formatClock, parseClock, shiftDay } from "@/lib/scheduling/weeklyBlocks";
@@ -42,6 +43,27 @@ export function draftFromProposal(
     inviteeIds: everyone ? null : [...opts.participantIds],
     repeat: null,
     fromSlot: `${p.dayLabel}, ${p.timeLabel}${call ? " (appel)" : p.placeName ? ` · ${p.placeName}` : ""}`,
+  };
+}
+
+/**
+ * Brouillon à partir de « Je suis libre maintenant » (page d'un groupe) : moi et cette
+ * personne seulement, au moment trouvé.
+ */
+export function draftFromFreeNow(
+  m: FreeNowMatchView,
+  opts: { groupId: string; userId: string; defaultTitle: string; callTitle: string; callLocation: string },
+): ProposeDraft {
+  const call = m.kind === "call";
+  return {
+    groupId: opts.groupId,
+    title: call ? opts.callTitle : opts.defaultTitle,
+    ...draftFromSlot(m.start, m.durationMinutes),
+    placeId: call ? null : m.placeId,
+    location: call ? opts.callLocation : "",
+    inviteeIds: [opts.userId, m.personId],
+    repeat: null,
+    fromSlot: `${m.dayLabel}, ${m.timeLabel} · ${m.name}${call ? " (appel)" : m.placeName ? ` · ${m.placeName}` : ""}`,
   };
 }
 

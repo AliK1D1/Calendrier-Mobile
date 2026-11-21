@@ -6,11 +6,15 @@ import { Avatar, AvatarStack } from "@/components/avatar";
 import { icons } from "@/components/icons";
 import { ListGroup, ListRow } from "@/components/list";
 
+import { FreeNow } from "@/components/free-now";
 import { MeetupFinder } from "@/components/meetup-finder";
+import { Reveal } from "@/components/motion";
+import { PlaceMap } from "@/components/place-map";
+import { useToast } from "@/components/toast";
 import { ProposeSheet } from "@/components/propose-sheet";
 
 import { PlanCard } from "@/components/plan-card";
-import { Badge, Body, Button, Card, EmptyState, ErrorText, Fill, Heading, Loading, Muted, Notice, Row, Screen, Section } from "@/components/ui";
+import { Badge, Body, Button, Card, EmptyState, ErrorText, Field, Fill, Footnote, Heading, Loading, Muted, Notice, Row, Screen, Section } from "@/components/ui";
 import { getGroupDetail } from "@/lib/groups/queries";
 import { inviteUrl } from "@/lib/groups/validation";
 import type { ProposalView } from "@/lib/meetups/search";
@@ -20,7 +24,10 @@ import { locale, t } from "@/services/i18n";
 import { useAuthed } from "@/services/session";
 import { SITE_URL } from "@/services/site";
 import { useLoad } from "@/services/use-load";
-import { draftFromProposal, type ProposeDraft } from "@/features/propose";
+import { draftFromFreeNow, draftFromProposal, type ProposeDraft } from "@/features/propose";
+import { reverseName } from "@/features/geocode";
+import { addGroupFavorite } from "@/features/settings";
+import type { FreeNowMatchView } from "@/lib/meetups/freeNow";
 import { space } from "@/theme/colors";
 
 const tg = t.groups;
@@ -43,6 +50,32 @@ export default function Groupe() {
   const [draft, setDraft] = useState<ProposeDraft | null>(null);
   const [extraPlace, setExtraPlace] = useState<{ id: string; name: string } | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
+  // Lieu favori à ajouter : point touché sur la carte (iPhone) et son nom.
+  const [fav, setFav] = useState<{ lat: number; lng: number; name: string; touched: boolean } | null>(null);
+  const [favBusy, setFavBusy] = useState(false);
+  const [favError, setFavError] = useState<string | null>(null);
+  const toast = useToast();
+
+  function pickFavorite(lat: number, lng: number) {
+    setFavError(null);
+    setFav((f) => ({ lat, lng, name: f?.touched ? f.name : "", touched: f?.touched ?? false }));
+    // Nom proposé (café, parc, adresse) si on ne l'a pas déjà écrit.
+    void reverseName(lat, lng).then((name) => {
+      if (name) setFav((f) => (f && !f.touched && f.lat === lat && f.lng === lng ? { ...f, name } : f));
+    });
+  }
+
+  async function saveFavorite() {
+    if (!group || !fav) return;
+    setFavBusy(true);
+    const name = fav.name.trim();
+    const r = await addGroupFavorite(supabase, userId, group.id, { name, lat: fav.lat, lng: fav.lng });
+    setFavBusy(false);
+    if (!r.ok) return setFavError(r.error);
+    setFav(null);
+    toast.show(tg.favoriteAdded(name));
+    void reload();
+  }
 
   const places = group ? group.favorites.map((f) => ({ id: f.id, name: f.name })) : [];
   if (extraPlace && !places.some((p) => p.id === extraPlace.id)) places.unshift(extraPlace);
@@ -55,6 +88,20 @@ export default function Groupe() {
         groupId: group.id,
         memberIds: group.members.map((m) => m.userId),
         participantIds,
+        defaultTitle: t.plans.defaultTitle,
+        callTitle: tg.callTitle,
+        callLocation: tg.callLocation,
+      }),
+    );
+  }
+
+  function proposeFromFreeNow(m: FreeNowMatchView) {
+    if (!group) return;
+    setExtraPlace(m.placeId && m.placeName ? { id: m.placeId, name: m.placeName } : null);
+    setDraft(
+      draftFromFreeNow(m, {
+        groupId: group.id,
+        userId,
         defaultTitle: t.plans.defaultTitle,
         callTitle: tg.callTitle,
         callLocation: tg.callLocation,
@@ -131,13 +178,57 @@ export default function Groupe() {
                     : `Aucun plan à venir. Cherche un moment ci-dessous, ou touche « ${tg.proposeMoment} ».`}
                 </Muted>
               ) : null}
-              {data.plans.map((p) => <PlanCard key={p.id} plan={p} onChanged={() => void reload()} />)}
+              {data.plans.map((p, i) => <PlanCard key={p.id} index={i} plan={p} onChanged={() => void reload()} />)}
             </Section>
 
             {!alone ? (
               <Section>
                 <Heading>{t.meetups.title}</Heading>
+                <FreeNow groupId={group.id} onPropose={proposeFromFreeNow} />
                 <MeetupFinder groupId={group.id} members={group.members} onPropose={proposeFromSlot} />
+              </Section>
+            ) : null}
+
+            {Platform.OS === "ios" ? (
+              <Section>
+                <Heading>{tg.favoritesTitle}</Heading>
+                <PlaceMap
+                  points={[
+                    ...group.favorites.map((f) => ({ id: f.id, lat: f.lat, lng: f.lng, label: f.name })),
+                    ...(fav ? [{ id: "nouveau", lat: fav.lat, lng: fav.lng, label: fav.name || "Nouveau lieu", highlighted: true }] : []),
+                  ]}
+                  onPick={pickFavorite}
+                  // Recadrer seulement quand les favoris changent, pas à chaque toucher.
+                  frameKey={group.favorites.map((f) => f.id).join("|")}
+                />
+                {fav ? (
+                  <Reveal>
+                    <Card>
+                      <Field
+                        label="Nom du lieu"
+                        value={fav.name}
+                        placeholder={tg.favoritePlaceholder}
+                        onChangeText={(v) => setFav({ ...fav, name: v, touched: true })}
+                        maxLength={100}
+                      />
+                      <ErrorText>{favError}</ErrorText>
+                      <Row nowrap>
+                        <Fill>
+                          <Button size="small" variant="secondary" label="Annuler" disabled={favBusy} onPress={() => setFav(null)} />
+                        </Fill>
+                        <Fill>
+                          <Button size="small" label="Ajouter au groupe" busy={favBusy} disabled={favBusy || !fav.name.trim()} onPress={() => void saveFavorite()} />
+                        </Fill>
+                      </Row>
+                    </Card>
+                  </Reveal>
+                ) : (
+                  <Footnote>
+                    {group.favorites.length === 0
+                      ? `${tg.noFavorites} Touche la carte à l'endroit voulu pour ajouter un café, un parc…`
+                      : "Touche la carte à l'endroit voulu pour ajouter un lieu au groupe."}
+                  </Footnote>
+                )}
               </Section>
             ) : null}
 

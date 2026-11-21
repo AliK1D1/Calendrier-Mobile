@@ -55,3 +55,57 @@ export async function searchAddress(
     return { ok: false, error: "Pas de connexion : la recherche d'adresse n'a pas fonctionné." };
   }
 }
+
+/** Lien Nominatim « quel est cet endroit ? » (géocodage inverse), en français. */
+export function buildReverseUrl(lat: number, lng: number): string {
+  const p = new URLSearchParams({ format: "jsonv2", lat: lat.toFixed(6), lon: lng.toFixed(6), zoom: "18", "accept-language": "fr" });
+  return `https://nominatim.openstreetmap.org/reverse?${p.toString()}`;
+}
+
+/**
+ * Nom à proposer pour un point touché sur la carte : le nom du lieu (café, parc…), sinon
+ * « numéro rue », sinon `null` (on laisse la personne l'écrire).
+ */
+export function parseReverse(json: unknown): string | null {
+  if (!json || typeof json !== "object") return null;
+  const o = json as Record<string, unknown>;
+  const clean = (v: unknown) => (typeof v === "string" ? v.trim().slice(0, 100) : "");
+  const name = clean(o.name);
+  if (name) return name;
+  const a = (o.address && typeof o.address === "object" ? o.address : {}) as Record<string, unknown>;
+  for (const k of ["amenity", "leisure", "shop", "tourism", "building"]) {
+    const v = clean(a[k]);
+    if (v) return v;
+  }
+  const road = clean(a.road);
+  if (road) return [clean(a.house_number), road].filter(Boolean).join(" ");
+  return null;
+}
+
+const reverseCache = new Map<string, string | null>();
+
+/** Nom proposé pour un point (même politique que la recherche : 1 requête/s, cache). */
+export async function reverseName(
+  lat: number,
+  lng: number,
+  deps: { fetch?: FetchLike; now?: () => number; wait?: (ms: number) => Promise<void> } = {},
+): Promise<string | null> {
+  const key = `${lat.toFixed(5)},${lng.toFixed(5)}`;
+  if (reverseCache.has(key)) return reverseCache.get(key) ?? null;
+  const now = deps.now ?? Date.now;
+  const wait = deps.wait ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
+  const gap = last + MIN_INTERVAL_MS - now();
+  if (gap > 0) await wait(gap);
+  last = now();
+  try {
+    const doFetch: FetchLike = deps.fetch ?? ((url, init) => fetch(url, init));
+    const res = await doFetch(buildReverseUrl(lat, lng), { headers: { "User-Agent": MOBILE_USER_AGENT, Accept: "application/json" } });
+    if (!res.ok) return null;
+    const name = parseReverse(await res.json());
+    if (reverseCache.size > 200) reverseCache.clear();
+    reverseCache.set(key, name);
+    return name;
+  } catch {
+    return null;
+  }
+}

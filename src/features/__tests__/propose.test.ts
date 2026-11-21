@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { ProposalView } from "@/lib/meetups/search";
 import { validatePropose } from "@/lib/plans/validation";
 
-import { draftFromProposal, nextDays, repeatOf, shiftStart } from "../propose";
+import { draftFromFreeNow, draftFromProposal, nextDays, repeatOf, shiftStart } from "../propose";
 
 const G = "11111111-1111-4111-8111-111111111111";
 const A = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
@@ -85,5 +85,36 @@ describe("choix du moment", () => {
   it("traduit le choix de répétition", () => {
     expect(repeatOf("none")).toBeNull();
     expect(repeatOf("week1")).toEqual({ unit: "week", every: 1, until: null });
+  });
+});
+
+describe("draftFromFreeNow", () => {
+  const match = {
+    personId: B,
+    name: "Maya",
+    groups: ["Gang"],
+    kind: "in-person" as const,
+    placeId: P,
+    placeName: "Café",
+    // 15 h 30 à Toronto le 13 novembre 2026.
+    start: "2026-11-13T20:30:00.000Z",
+    end: "2026-11-13T21:30:00.000Z",
+    timeLabel: "15 h 30 – 16 h 30",
+    dayLabel: "vendredi 13 novembre",
+    durationMinutes: 60,
+    myTravel: 12,
+    theirTravel: 8,
+  };
+  const o = { groupId: G, userId: A, defaultTitle: "On se voit", callTitle: "Appel", callLocation: "Appel ou visio" };
+
+  it("invite seulement moi et cette personne, au lieu trouvé", () => {
+    const d = draftFromFreeNow(match, o);
+    expect(d).toMatchObject({ groupId: G, title: "On se voit", date: "2026-11-13", start: "15:30", durationMinutes: 60, placeId: P, location: "", inviteeIds: [A, B] });
+    expect(d.fromSlot).toBe("vendredi 13 novembre, 15 h 30 – 16 h 30 · Maya · Café");
+  });
+
+  it("appel : pas de lieu", () => {
+    const d = draftFromFreeNow({ ...match, kind: "call", placeId: null, placeName: null }, o);
+    expect(d).toMatchObject({ title: "Appel", placeId: null, location: "Appel ou visio" });
   });
 });

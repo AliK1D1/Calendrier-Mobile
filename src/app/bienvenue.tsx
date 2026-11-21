@@ -3,7 +3,9 @@ import { useState } from "react";
 import { Text, View } from "react-native";
 
 import { AddressSearch } from "@/components/address-search";
+import { Swap } from "@/components/motion";
 import { Button, Card, Chip, ErrorText, Fill, Muted, Row, Screen } from "@/components/ui";
+import { PlaceMap } from "@/components/place-map";
 import { completeOnboarding, skipOnboarding } from "@/features/settings";
 import type { GeocodeResult } from "@/lib/geocoding/nominatim";
 import { TRAVEL_MODE_LABELS, TRAVEL_MODES } from "@/lib/places/validation";
@@ -63,16 +65,28 @@ export default function Bienvenue() {
             <View key={n} style={{ flex: 1, height: 5, borderRadius: 3, backgroundColor: n <= step ? c.primary : c.accent }} />
           ))}
         </View>
+        {/* Chaque question arrive en fondu. */}
+        <Swap key={step} style={{ gap: space.md }}>
         <View style={{ gap: 2 }}>
           <Text style={[type.footnote, { color: c.muted }]}>{to.stepOf(step + 1, 3)}</Text>
           <Text accessibilityRole="header" style={[type.title, { color: c.text }]}>{to.steps[step]}</Text>
           <Muted>{to.stepHints[step]}</Muted>
         </View>
         {step === 0 ? (
-          <AddressSearch label={to.homeLabel} placeholder={to.homePlaceholder} selected={home} onSelect={setHome} />
+          <>
+            <AddressSearch label={to.homeLabel} placeholder={to.homePlaceholder} selected={home} onSelect={setHome} />
+            {home ? (
+              <PlaceMap height={180} frameKey={home.id} points={[{ id: "maison", lat: home.lat, lng: home.lng, label: to.homeDefaultName, highlighted: true }]} onPick={(lat, lng) => setHome({ ...home, lat, lng })} />
+            ) : null}
+          </>
         ) : null}
         {step === 1 ? (
-          <AddressSearch label={to.schoolLabel} placeholder={to.schoolPlaceholder} selected={school} onSelect={setSchool} />
+          <>
+            <AddressSearch label={to.schoolLabel} placeholder={to.schoolPlaceholder} selected={school} onSelect={setSchool} />
+            {school ? (
+              <PlaceMap height={180} frameKey={school.id} points={[{ id: "ecole", lat: school.lat, lng: school.lng, label: school.name, highlighted: true }]} onPick={(lat, lng) => setSchool({ ...school, lat, lng })} />
+            ) : null}
+          </>
         ) : null}
         {step === 2 ? (
           <Row>
@@ -81,6 +95,7 @@ export default function Bienvenue() {
             ))}
           </Row>
         ) : null}
+        </Swap>
         <ErrorText>{error}</ErrorText>
         <Row nowrap>
           {step > 0 ? (

@@ -75,3 +75,17 @@ export function namesSummary(names: readonly string[], max = 2): string {
   const rest = names.length - max;
   return `${names.slice(0, max).join(", ")} et ${rest} autre${rest > 1 ? "s" : ""}`;
 }
+
+/** Durée d'apparition d'un élément (ms) et décalage entre deux éléments d'une liste. */
+export const APPEAR_MS = 260;
+const STAGGER_MS = 45;
+const STAGGER_MAX = 6;
+
+/**
+ * Délai d'apparition (ms) de l'élément `index` d'une liste : les premiers arrivent en cascade,
+ * puis tous les suivants en même temps (une longue liste ne fait pas attendre).
+ */
+export function staggerDelay(index: number): number {
+  if (!Number.isFinite(index) || index <= 0) return 0;
+  return Math.min(Math.floor(index), STAGGER_MAX) * STAGGER_MS;
+}
