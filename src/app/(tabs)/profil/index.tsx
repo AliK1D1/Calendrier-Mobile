@@ -1,24 +1,30 @@
 import Constants from "expo-constants";
 import { router } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
-import { useState } from "react";
-import { Text, View } from "react-native";
+import { useRef, useState } from "react";
+import { Keyboard, Pressable, Text, View } from "react-native";
 
 import { AppearanceCard } from "@/components/appearance-card";
 import { Avatar } from "@/components/avatar";
+import { useDuckRain } from "@/components/duck-rain";
 import { ListGroup, ListRow } from "@/components/list";
 import { Reveal } from "@/components/motion";
 import { NotificationsCard } from "@/components/notifications-card";
+import { QueueGag } from "@/components/queue-gag";
 import { Stepper } from "@/components/steppers";
+import { useToast } from "@/components/toast";
 import { Toggle } from "@/components/toggle";
 import { Button, Card, Chip, ErrorText, Field, Footnote, Heading, Label, Loading, Muted, Notice, Row, Screen, Section, Segmented } from "@/components/ui";
 import { shiftClock } from "@/features/blocks";
+import { countTap, NO_TAPS, quackMessage, tapHint, type TapState } from "@/features/canard";
+import { isMagicWord } from "@/features/fileAttente";
 import { savePrivacy, saveOutingLimits, saveProfile, saveQuietHours } from "@/features/settings";
 import { TRAVEL_MODE_LABELS, TRAVEL_MODES } from "@/lib/places/validation";
 import { outingLimitsFromDb } from "@/lib/scheduling/outingLimits";
 import { quietHoursFromDb } from "@/lib/scheduling/quietHours";
 import { formatClock, formatClockFr, parseClock } from "@/lib/scheduling/weeklyBlocks";
 import { getMyOutingLimits, getMyPrivacy, getMyProfile, getMyQuietHours } from "@/lib/profile";
+import { hapticQuack, hapticSelect } from "@/services/haptics";
 import { t } from "@/services/i18n";
 import { useAuthed, useSession } from "@/services/session";
 import { oublierCeTelephone } from "@/services/notifications";
@@ -130,7 +136,17 @@ function ProfileForms({
   const pv = useSave();
   const ol = useSave();
   const [signingOut, setSigningOut] = useState(false);
+  const [queue, setQueue] = useState(false);
   const shownName = data.profile?.display_name || t.home.user;
+
+  // Écrire « omnivox » comme nom : direction la file d'attente (features/fileAttente.ts).
+  function changeName(next: string) {
+    setName(next);
+    if (isMagicWord(next) && !isMagicWord(name)) {
+      Keyboard.dismiss();
+      setQueue(true);
+    }
+  }
 
   // Confidentialité : l'interrupteur enregistre tout de suite (et revient en arrière si ça échoue).
   function changeHide(next: boolean) {
@@ -157,7 +173,7 @@ function ProfileForms({
       <Section>
         <Heading>Mon profil</Heading>
         <Card style={{ gap: space.md }}>
-          <Field label="Ton nom (vu par tes amis)" value={name} onChangeText={setName} maxLength={60} autoComplete="nickname" />
+          <Field label="Ton nom (vu par tes amis)" value={name} onChangeText={changeName} maxLength={60} autoComplete="nickname" />
           <View style={{ gap: space.sm }}>
             <Label>Mode de transport</Label>
             <Row>
@@ -250,7 +266,38 @@ function ProfileForms({
           }}
         />
       </ListGroup>
-      <Footnote center>{`Freecrew ${Constants.expoConfig?.version ?? ""}`}</Footnote>
+      <VersionFootnote />
+      {queue ? <QueueGag onClose={() => setQueue(false)} /> : null}
     </Screen>
+  );
+}
+
+/** Le numéro de version. Rien à voir ici. Surtout, ne pas le toucher 7 fois de suite. */
+function VersionFootnote() {
+  const rain = useDuckRain();
+  const toast = useToast();
+  const taps = useRef<TapState>(NO_TAPS);
+  const version = `Freecrew ${Constants.expoConfig?.version ?? ""}`;
+
+  function tap() {
+    const r = countTap(taps.current, Date.now());
+    taps.current = r.state;
+    if (r.unlocked) {
+      hapticQuack();
+      rain();
+      toast.show(quackMessage(Math.random));
+      return;
+    }
+    const hint = tapHint(r.left);
+    if (hint) {
+      hapticSelect();
+      toast.show(hint);
+    }
+  }
+
+  return (
+    <Pressable accessibilityLabel={version} hitSlop={12} onPress={tap}>
+      <Footnote center>{version}</Footnote>
+    </Pressable>
   );
 }

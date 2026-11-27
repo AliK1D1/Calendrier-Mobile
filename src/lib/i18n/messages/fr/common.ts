@@ -2,7 +2,7 @@
 export const common = {
   appName: "Freecrew",
   appShortName: "Freecrew",
-  appDescription: "Trouvez des moments et des endroits réalistes pour vous voir entre amis.",
+  appDescription: "Trouve des moments et des endroits réalistes pour vous voir entre amis.",
   nav: {
     main: "Navigation principale",
     tabs: "Onglets",

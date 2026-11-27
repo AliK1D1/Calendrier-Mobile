@@ -32,6 +32,12 @@ export function hapticSuccess() {
   run(() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success));
 }
 
+/** « Coin… coin ! » : deux coups forts rapprochés (mode canard). */
+export function hapticQuack() {
+  run(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy));
+  setTimeout(() => run(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy)), 140);
+}
+
 /** Une action a échoué. */
 export function hapticError() {
   run(() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error));
